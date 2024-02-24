@@ -48,27 +48,27 @@ int strncmp(const char *s1, const char *s2, size_t n) {
 }
 
 char *strcat(char *dst, const char *src) {
-    size_t l_begin = strlen(dst);
+    size_t len=strlen(dst);
     size_t i=0;
 
     while (src[i] != '\0') {
-        dst [ l_begin+i ] = src [i];
+        dst[len+i] = src[i];
         i++;
     }
-    dst[l_begin+i]=0;
+    dst[len+i]=0;
 
     return dst;
 }
 
 char *strncat(char *dst, const char *src, size_t n){
-    size_t l_begin = strlen(dst);
+    size_t len=strlen(dst);
     size_t i=0;
 
     while (i<n && src[i]!='\0') {
-        dst[l_begin+i] = src[i];
+        dst[len+i] = src[i];
         i++;
     }
-    dst[l_begin+i]=0;
+    dst[len+i]=0;
 
     return dst;
 }
@@ -85,26 +85,22 @@ char *strchr(const char *str, int character){
 }
 
 char* strsep(char** stringp, const char* delim){
-    if( *stringp == NULL)
+    if(*stringp == NULL)
         return NULL;
 
-    char *str;
+    size_t i=0;
+    char *str=*stringp;
 
-    while(**stringp) {
-        if((str=strchr(delim,(int) (**stringp) ))!=NULL ) {
-            *str=0;
+    for(i=0;str[i]!=0;i++) {
+        if(strchr(delim,str[i])!=NULL) {
+            str[i]=0;
+            *stringp=&(str[i+1]);
+
+            return str;
         }
-
-        *stringp++;
     }
-
-    if(**stringp==0)
-        return NULL;
-    else
-        return *stringp;
-
+    return NULL;
 }
-
 
 void *memset(void *s, int c, size_t n) {
     unsigned char *p = s;
