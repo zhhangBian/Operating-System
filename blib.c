@@ -1,9 +1,9 @@
 #include <blib.h>
 
 size_t strlen(const char *s) {
-    size_t len=0,i=0;
+    size_t len=0;
     
-    while(s[i]!='\0') {
+    while(s[len]!='\0') {
         len++;
     }
 
@@ -12,8 +12,7 @@ size_t strlen(const char *s) {
 
 char *strcpy(char *dst, const char *src) {
     char *res = dst;
-    while ((*dst++ = *src++))
-        ;
+    while ((*dst++ = *src++)) ;
     return res;
 }
 
@@ -56,6 +55,7 @@ char *strcat(char *dst, const char *src) {
         dst [ l_begin+i ] = src [i];
         i++;
     }
+    dst[l_begin+i]=0;
 
     return dst;
 }
@@ -68,6 +68,7 @@ char *strncat(char *dst, const char *src, size_t n){
         dst[l_begin+i] = src[i];
         i++;
     }
+    dst[l_begin+i]=0;
 
     return dst;
 }
@@ -86,15 +87,15 @@ char *strchr(const char *str, int character){
 char* strsep(char** stringp, const char* delim){
     if( *stringp == NULL)
         return NULL;
-    
-    size_t i=0;
+
     char *str;
 
     while(**stringp) {
         if((str=strchr(delim,(int) (**stringp) ))!=NULL ) {
             *str=0;
-            **stringp++;
         }
+
+        *stringp++;
     }
 
     if(**stringp==0)
