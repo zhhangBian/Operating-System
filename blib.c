@@ -94,7 +94,7 @@ char* strsep(char** stringp, const char* delim){
     for(i=0;str[i]!=0;i++) {
         if(strchr(delim,str[i])!=NULL) {
             str[i]=0;
-            *stringp=&(str[i+1]);
+            *stringp=&(str[i]);
 
             return str;
         }
