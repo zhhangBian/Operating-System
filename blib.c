@@ -91,9 +91,9 @@ char* strsep(char** stringp, const char* delim){
     size_t i=0;
     char *str=*stringp;
 
-    for(i=0;str[i]!=0;i++) {
+    for(i=0;str[i]!='\0';i++) {
         if(strchr(delim,str[i])!=NULL) {
-            str[i]=0;
+            str[i]='\0';
             *stringp=&(str[i+1]);
             
             return str;
@@ -101,7 +101,7 @@ char* strsep(char** stringp, const char* delim){
     }
 
     *stringp=NULL;
-    return NULL;
+    return str;
 }
 
 void *memset(void *s, int c, size_t n) {
