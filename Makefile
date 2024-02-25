@@ -1,7 +1,6 @@
 .PHONY: clean
-.PHONY: out
 
-out: case_all
+out: calc case_all
 	./calc < case_all > out
 
 case_add: casegen
