@@ -1,2 +1,5 @@
 #!/bin/bash
-sed 's/char/int/g' fibo.c
+file=$1
+pre=$2
+aft=$3
+sed 's/'$2'/'$3'/g' "$1"
