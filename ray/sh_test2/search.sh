@@ -9,4 +9,5 @@ touch tmp
 chmod a+w tmp
 chmod a+w "$output"
 grep -n "$pattern" "$input" > tmp
-sed 's/:'$pattern'//g' tmp > "$output"
+sed 's/:'$pattern'//g' tmp | awk '{print $1}' > "$output"
+rm tmp
