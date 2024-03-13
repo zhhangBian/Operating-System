@@ -28,4 +28,4 @@ else
 	n=$((n1+n2))
 fi
 
-sed -n "$np" ./err.txt >&2
+sed -n $n'p' ./err.txt >&2
