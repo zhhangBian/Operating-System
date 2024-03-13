@@ -20,9 +20,12 @@ n=2
 if [ $# -eq 0 ]; then
 	n=2
 elif [ $# -eq 1 ]; then
-	n=$1+1
+	num=$1
+	n=$((num+1))
 else
-	n=$1+$2
+	n1=$1
+	n2=$2
+	n=$((n1+n2))
 fi
 
 sed -n "$np" ./err.txt >&2
