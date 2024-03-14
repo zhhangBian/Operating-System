@@ -45,7 +45,14 @@ elif [ ! -z $PID ]; then
 #	while [ ! -z $PID ]; do
 #		awk -v p=$PID '$2==p {print $3 ; p=$3}i' $FILE
 #	done
-	awk -v p=$PID 'p==$2 {print $3}' "$FILE"
+	awk -v p=$PID '{
+	while(p!=0) {
+		if( p==$2 ) {
+			print $3
+			p=$3
+		}
+	}
+}' "$FILE"
 else
     usage
     exit 1
