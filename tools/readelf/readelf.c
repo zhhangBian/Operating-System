@@ -10,10 +10,17 @@
  * Post-Condition:
  *   Returns 0 if 'binary' isn't an ELF, otherwise returns 1.
  */
+
+// 通过文件头的魔数确定是否为ELF文件
+// size为文件大小
+// binary为申请到的空间，大小为size+1
 int is_elf_format(const void *binary, size_t size) {
 	Elf32_Ehdr *ehdr = (Elf32_Ehdr *)binary;
-	return size >= sizeof(Elf32_Ehdr) && ehdr->e_ident[EI_MAG0] == ELFMAG0 &&
-	       ehdr->e_ident[EI_MAG1] == ELFMAG1 && ehdr->e_ident[EI_MAG2] == ELFMAG2 &&
+	// 通过魔数进行确认
+	return size >= sizeof(Elf32_Ehdr) && 
+		   ehdr->e_ident[EI_MAG0] == ELFMAG0 &&
+	       ehdr->e_ident[EI_MAG1] == ELFMAG1 && 
+		   ehdr->e_ident[EI_MAG2] == ELFMAG2 &&
 	       ehdr->e_ident[EI_MAG3] == ELFMAG3;
 }
 
@@ -43,6 +50,9 @@ int readelf(const void *binary, size_t size) {
 	Elf32_Half sh_entry_count;
 	Elf32_Half sh_entry_size;
 	/* Exercise 1.1: Your code here. (1/2) */
+	sh_table=binary;
+	sh_entry_count=1;
+	sh_entry_size=2;
 
 	// For each section header, output its index and the section address.
 	// The index should start from 0.
