@@ -58,13 +58,11 @@ void vprintfmt(fmt_callback_t out, void *data, const char *fmt, va_list ap) {
 
 		/* get width */
 		/* Exercise 1.4: Your code here. (6/8) */
-		int num=0;
 		while (*fmt>='0' && *fmt<='9')
 		{
-			num=num*10+*fmt-'0';
+			width=width*10+*fmt-'0';
 			fmt++;
 		}
-		width=num;
 
 		/* check for long */
 		/* Exercise 1.4: Your code here. (7/8) */
@@ -99,7 +97,7 @@ void vprintfmt(fmt_callback_t out, void *data, const char *fmt, va_list ap) {
 			/* Exercise 1.4: Your code here. (8/8) */
       if(num<0) {
         neg_flag=1;
-        num=-num;
+        num=-1*num;
       }
       print_num(out, data, num, 10, neg_flag, width, ladjust, padc, 0);
 
