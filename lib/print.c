@@ -9,17 +9,24 @@ void vprintfmt(fmt_callback_t out, void *data, const char *fmt, va_list ap) {
 	char c;
 	const char *s;
 	long num;
-
+	
+	// 标记输出宽度
 	int width;
+	// 是否为long型
 	int long_flag; // output is long (rather than int)
+	// 是否为负数
 	int neg_flag;  // output is negative
+	// 是否左对齐
 	int ladjust;   // output is left-aligned
+	// 填充多余位置所用字符
 	char padc;     // padding char
 
 	for (;;) {
 		/* scan for the next '%' */
 		/* Exercise 1.4: Your code here. (1/8) */
+		if ( *fmt != '%' ) {
 
+		}
 		/* flush the string found so far */
 		/* Exercise 1.4: Your code here. (2/8) */
 
