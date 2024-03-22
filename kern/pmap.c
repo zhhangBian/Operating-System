@@ -79,6 +79,7 @@ void mips_vm_init() {
 	 * for physical memory management. Then, map virtual address `UPAGES` to
 	 * physical address `pages` allocated before. For consideration of alignment,
 	 * you should round up the memory size before map. */
+  //申请了 npage 个 struct Page 大小的内存。并以 页的大小 进行对齐。同时将申请的内存中内容初始化为 0
 	pages = (struct Page *)alloc(npage * sizeof(struct Page), PAGE_SIZE, 1);
 	printk("to memory %x for struct Pages.\n", freemem);
 	printk("pmap.c:\t mips vm init success\n");
@@ -94,12 +95,15 @@ void page_init(void) {
 	/* Step 1: Initialize page_free_list. */
 	/* Hint: Use macro `LIST_INIT` defined in include/queue.h. */
 	/* Exercise 2.3: Your code here. (1/4) */
+  LIST_INIT(&page_free_list);
 
 	/* Step 2: Align `freemem` up to multiple of PAGE_SIZE. */
 	/* Exercise 2.3: Your code here. (2/4) */
+  freemem = ROUND(freemem, PAGE_SIZE);
 
 	/* Step 3: Mark all memory below `freemem` as used (set `pp_ref` to 1) */
 	/* Exercise 2.3: Your code here. (3/4) */
+
 
 	/* Step 4: Mark the other memory as free. */
 	/* Exercise 2.3: Your code here. (4/4) */

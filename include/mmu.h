@@ -17,6 +17,7 @@
 #define PTE_FLAGS(pte) (((u_long)(pte)) & 0xFFF)
 
 // Page number field of an address
+// 位运算的背后原因是 页号*页的大小 得到基地址
 #define PPN(pa) (((u_long)(pa)) >> PGSHIFT)
 #define VPN(va) (((u_long)(va)) >> PGSHIFT)
 
@@ -89,7 +90,7 @@
  o                      +----------------------------+----|------                |
  o                      |       Kernel Text          |    |                    PDMAP
  o      KERNBASE -----> +----------------------------+----|-------0x8002 0000    |
- o                      |      Exception Entry       |   \|/                    \|/
+ o                      |      Exception Entry       | \|/            \|/
  o      ULIM     -----> +----------------------------+------------0x8000 0000-------
  o                      |         User VPT           |     PDMAP                /|\
  o      UVPT     -----> +----------------------------+------------0x7fc0 0000    |
@@ -115,7 +116,7 @@
  o       UCOW    -----> +----------------------------+------------0x003f f000    |
  o                      |   reversed for temporary   |     PTMAP                 |
  o       UTEMP   -----> +----------------------------+------------0x003f e000    |
- o                      |       invalid memory       |                          \|/
+ o                      |       invalid memory       |                  \|/
  a     0 ------------>  +----------------------------+ ----------------------------
  o
 */
@@ -151,35 +152,35 @@ extern u_long npage;
 typedef u_long Pde;
 typedef u_long Pte;
 
-#define PADDR(kva)                                                                                 \
-	({                                                                                         \
-		u_long _a = (u_long)(kva);                                                         \
-		if (_a < ULIM)                                                                     \
-			panic("PADDR called with invalid kva %08lx", _a);                          \
-		_a - ULIM;                                                                         \
+#define PADDR(kva)\
+	({\
+		u_long _a = (u_long)(kva);\
+		if (_a < ULIM)\
+			panic("PADDR called with invalid kva %08lx", _a);\
+		_a - ULIM;\
 	})
 
 // translates from physical address to kernel virtual address
-#define KADDR(pa)                                                                                  \
-	({                                                                                         \
-		u_long _ppn = PPN(pa);                                                             \
-		if (_ppn >= npage) {                                                               \
-			panic("KADDR called with invalid pa %08lx", (u_long)pa);                   \
-		}                                                                                  \
-		(pa) + ULIM;                                                                       \
+#define KADDR(pa)\
+	({\
+		u_long _ppn = PPN(pa);\
+		if (_ppn >= npage) {\
+			panic("KADDR called with invalid pa %08lx", (u_long)pa);\
+		}\
+		(pa) + ULIM;\
 	})
 
-#define assert(x)                                                                                  \
-	do {                                                                                       \
-		if (!(x)) {                                                                        \
-			panic("assertion failed: %s", #x);                                         \
-		}                                                                                  \
+#define assert(x)\
+	do {\
+		if (!(x)) {\
+			panic("assertion failed: %s", #x);\
+		}\
 	} while (0)
 
-#define TRUP(_p)                                                                                   \
-	({                                                                                         \
-		typeof((_p)) __m_p = (_p);                                                         \
-		(u_int) __m_p > ULIM ? (typeof(_p))ULIM : __m_p;                                   \
+#define TRUP(_p) \
+	({\
+		typeof((_p)) __m_p = (_p);\
+		(u_int) __m_p > ULIM ? (typeof(_p))ULIM : __m_p;\
 	})
 
 extern void tlb_out(u_int entryhi);

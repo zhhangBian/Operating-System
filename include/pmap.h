@@ -19,20 +19,25 @@ struct Page {
 	// page_alloc.  Pages allocated at boot time using pmap.c's "alloc"
 	// do not have valid reference count fields.
 
+  // 有多少个物理页对应该虚拟页
 	u_short pp_ref;
 };
 
 extern struct Page *pages;
 extern struct Page_list page_free_list;
 
+// 通过指针减法，得到对应的控制块是第几个页
 static inline u_long page2ppn(struct Page *pp) {
 	return pp - pages;
 }
 
+// page to physical address
+// 位运算不是本质，本质是 第几个页*页的大小，得到基地址
 static inline u_long page2pa(struct Page *pp) {
 	return page2ppn(pp) << PGSHIFT;
 }
 
+// 通过物理地址获取对应的页控制块
 static inline struct Page *pa2page(u_long pa) {
 	if (PPN(pa) >= npage) {
 		panic("pa2page called with invalid pa: %x", pa);
