@@ -11,6 +11,7 @@ extern Pde *cur_pgdir;
 LIST_HEAD(Page_list, Page);
 typedef LIST_ENTRY(Page) Page_LIST_entry_t;
 
+// 代表了对虚页的控制变量
 struct Page {
 	Page_LIST_entry_t pp_link; /* free list link */
 
