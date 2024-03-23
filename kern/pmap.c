@@ -134,7 +134,7 @@ int page_alloc(struct Page **new) {
 	struct Page *pp;
 	/* Exercise 2.4: Your code here. (1/2) */
 	if(LIST_EMPTY(&page_free_list)) {
-		return E_NO_MEM;
+		return -E_NO_MEM;
 	}
 	pp = LIST_FIRST(&page_free_list);
 
@@ -327,7 +327,7 @@ void physical_memory_manage_check(void) {
 	// now this page_free list must be empty!!!!
 	LIST_INIT(&page_free_list);
 	// should be no free memory
-	assert(page_alloc(&pp) == E_NO_MEM);
+	assert(page_alloc(&pp) == -E_NO_MEM);
 
 	temp = (int *)page2kva(pp0);
 	// write 1000 to pp0
