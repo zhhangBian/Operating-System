@@ -47,10 +47,10 @@
  * elements to be linked into the list.
  */
 
-// 表示创建一个元素类型为 type 的链表，这个链表类型名为 name
-#define LIST_HEAD(name, type)\
-	struct name {\
-		struct type *lh_first; /* first element */\
+// 表示创建一个元素类型为 node 的链表，这个链表类型名为 name
+#define LIST_HEAD(list_name, node)\
+	struct list_name {\
+		struct node *lh_first; /* first element */\
 	}
 
 /*
@@ -61,18 +61,18 @@
 	{ NULL }
 
 /*
- * Use this inside a structure "LIST_ENTRY(type) field" to use
+ * Use this inside a structure "LIST_ENTRY(node) area" to use
  * x as the list piece.
  *
  * The le_prev points at the pointer to the structure containing
  * this very LIST_ENTRY, so that if we want to remove this list entry,
  * we can do *le_prev = le_next to update the structure pointing at us.
  */
-// 相当于一个特殊类型，是一个链表项。创建一个类型为 type 的链表元素。
-#define LIST_ENTRY(type)\
+// 相当于一个特殊类型，是一个链表项。创建一个类型为 node 的链表元素。
+#define LIST_ENTRY(node)\
 	struct {\
-		struct type *le_next;  /* next element */\
-		struct type **le_prev; /* address of previous next element */\
+		struct node *le_next;  /* next element */\
+		struct node **le_prev; /* address of previous next element */\
 	}
 
 /*
@@ -82,31 +82,35 @@
 /*
  * Detect the list named "head" is empty.
  */
-#define LIST_EMPTY(head) ((head)->lh_first == NULL)
+#define LIST_EMPTY(list) ((list)->lh_first == NULL)
 
 /*
  * Return the first element in the list named "head".
  */
-#define LIST_FIRST(head) ((head)->lh_first)
+#define LIST_FIRST(list) ((list)->lh_first)
 
 /*
- * Iterate over the elements in the list named "head".
+ * Iterate over the elements in the list named "list".
  * During the loop, assign the list elements to the variable "var"
- * and use the LIST_ENTRY structure member "field" as the link field.
+ * and use the LIST_ENTRY structure member "area" as the link area.
  */
-#define LIST_FOREACH(var, head, field) \
-	for ((var) = LIST_FIRST((head)); (var); (var) = LIST_NEXT((var), field))
+#define LIST_FOREACH(var, list, area) \
+	for ((var) = LIST_FIRST((list)); (var); (var) = LIST_NEXT((var), area))
 
 /*
  * Reset the list named "head" to the empty list.
  */
-#define LIST_INIT(head)\
+#define LIST_INIT(list)\
 	do {\
-		LIST_FIRST((head)) = NULL;\
+		LIST_FIRST((list)) = NULL;\
 	} while (0)
 
+// area一般是Page中的指针域，包含前向和后向指针
+// 返回一个当前节点的后向指针
+#define LIST_NEXT(elm, area) ((elm)->area.le_next)
+
 /*
- * Insert the element 'elm' *after* 'listelm' which is already in the list. The 'field'
+ * Insert the element 'elm' *after* 'listelm' which is already in the list. The 'area'
  * name is the link element as above.
  *
  * Hint:
@@ -116,51 +120,49 @@
  * Step 4: assign 'elm.pre' from a proper value.
  */
 // 由于是双向链表，要判断是否有下一个元素
-#define LIST_INSERT_AFTER(listelm, elm, field) \
+#define LIST_INSERT_AFTER(listelm, elm, area) \
 	/* Exercise 2.2: Your code here. */\
   do {\
-		if ((LIST_NEXT((elm), field) = LIST_NEXT((listelm), field)) != NULL)\
-			LIST_NEXT((listelm), field)->field.le_prev = &LIST_NEXT((elm), field); \
-		LIST_NEXT((listelm), field) = (elm);\
-		(elm)->field.le_prev = &LIST_NEXT((listelm), field);\
+		if ((LIST_NEXT((elm), area) = LIST_NEXT((listelm), area)) != NULL)\
+			LIST_NEXT((listelm), area)->area.le_prev = &LIST_NEXT((elm), area); \
+    LIST_NEXT((listelm), area) = (elm);\
+    (elm)->area.le_prev = &LIST_NEXT((listelm), area);\
 	} while (0)
 
 /*
  * Insert the element "elm" *before* the element "listelm" which is
- * already in the list.  The "field" name is the link element
+ * already in the list.  The "area" name is the link element
  * as above.
  */
-#define LIST_INSERT_BEFORE(listelm, elm, field)\
+#define LIST_INSERT_BEFORE(listelm, elm, area)\
 	do {\
-		(elm)->field.le_prev = (listelm)->field.le_prev;\
-		LIST_NEXT((elm), field) = (listelm);\
-		*(listelm)->field.le_prev = (elm);\
-		(listelm)->field.le_prev = &LIST_NEXT((elm), field);\
+		(elm)->area.le_prev = (listelm)->area.le_prev;\
+		LIST_NEXT((elm), area) = (listelm);\
+		*(listelm)->area.le_prev = (elm);\
+		(listelm)->area.le_prev = &LIST_NEXT((elm), area);\
 	} while (0)
 
 /*
- * Insert the element "elm" at the head of the list named "head".
- * The "field" name is the link element as above.
+ * Insert the element "elm" at the head of the list named "list".
+ * The "area" name is the link element as above.
  */
-#define LIST_INSERT_HEAD(head, elm, field) \
+#define LIST_INSERT_HEAD(list, elm, area) \
 	do { \
-		if ((LIST_NEXT((elm), field) = LIST_FIRST((head))) != NULL) \
-			LIST_FIRST((head))->field.le_prev = &LIST_NEXT((elm), field); \
-		LIST_FIRST((head)) = (elm); \
-		(elm)->field.le_prev = &LIST_FIRST((head)); \
+		if ((LIST_NEXT((elm), area) = LIST_FIRST((list))) != NULL) \
+			LIST_FIRST((list))->area.le_prev = &LIST_NEXT((elm), area); \
+		LIST_FIRST((list)) = (elm); \
+		(elm)->area.le_prev = &LIST_FIRST((list)); \
 	} while (0)
-
-#define LIST_NEXT(elm, field) ((elm)->field.le_next)
 
 /*
  * Remove the element "elm" from the list.
- * The "field" name is the link element as above.
+ * The "area" name is the link element as above.
  */
-#define LIST_REMOVE(elm, field) \
+#define LIST_REMOVE(elm, area) \
 	do { \
-		if (LIST_NEXT((elm), field) != NULL) \
-			LIST_NEXT((elm), field)->field.le_prev = (elm)->field.le_prev; \
-		*(elm)->field.le_prev = LIST_NEXT((elm), field); \
+		if (LIST_NEXT((elm), area) != NULL) \
+			LIST_NEXT((elm), area)->area.le_prev = (elm)->area.le_prev; \
+		*(elm)->area.le_prev = LIST_NEXT((elm), area); \
 	} while (0)
 
 /*
@@ -192,63 +194,63 @@
 		(head)->tqh_last = &(head)->tqh_first;\
 	} while (/*CONSTCOND*/ 0)
 
-#define TAILQ_INSERT_HEAD(head, elm, field)\
+#define TAILQ_INSERT_HEAD(head, elm, area)\
 	do {\
-		if (((elm)->field.tqe_next = (head)->tqh_first) != NULL)\
-			(head)->tqh_first->field.tqe_prev = &(elm)->field.tqe_next;\
+		if (((elm)->area.tqe_next = (head)->tqh_first) != NULL)\
+			(head)->tqh_first->area.tqe_prev = &(elm)->area.tqe_next;\
 		else\
-			(head)->tqh_last = &(elm)->field.tqe_next;\
+			(head)->tqh_last = &(elm)->area.tqe_next;\
 		(head)->tqh_first = (elm);\
-		(elm)->field.tqe_prev = &(head)->tqh_first;\
+		(elm)->area.tqe_prev = &(head)->tqh_first;\
 	} while (/*CONSTCOND*/ 0)
 
-#define TAILQ_INSERT_TAIL(head, elm, field)\
+#define TAILQ_INSERT_TAIL(head, elm, area)\
 	do {\
-		(elm)->field.tqe_next = NULL;\
-		(elm)->field.tqe_prev = (head)->tqh_last;\
+		(elm)->area.tqe_next = NULL;\
+		(elm)->area.tqe_prev = (head)->tqh_last;\
 		*(head)->tqh_last = (elm); \
-		(head)->tqh_last = &(elm)->field.tqe_next; \
+		(head)->tqh_last = &(elm)->area.tqe_next; \
 	} while (/*CONSTCOND*/ 0)
 
-#define TAILQ_INSERT_AFTER(head, listelm, elm, field)\
+#define TAILQ_INSERT_AFTER(head, listelm, elm, area)\
 	do { \
-		if (((elm)->field.tqe_next = (listelm)->field.tqe_next) != NULL) \
-			(elm)->field.tqe_next->field.tqe_prev = &(elm)->field.tqe_next;\
+		if (((elm)->area.tqe_next = (listelm)->area.tqe_next) != NULL) \
+			(elm)->area.tqe_next->area.tqe_prev = &(elm)->area.tqe_next;\
 		else \
-			(head)->tqh_last = &(elm)->field.tqe_next; \
-		(listelm)->field.tqe_next = (elm); \
-		(elm)->field.tqe_prev = &(listelm)->field.tqe_next;\
+			(head)->tqh_last = &(elm)->area.tqe_next; \
+		(listelm)->area.tqe_next = (elm); \
+		(elm)->area.tqe_prev = &(listelm)->area.tqe_next;\
 	} while (/*CONSTCOND*/ 0)
 
-#define TAILQ_INSERT_BEFORE(listelm, elm, field) \
+#define TAILQ_INSERT_BEFORE(listelm, elm, area) \
 	do { \
-		(elm)->field.tqe_prev = (listelm)->field.tqe_prev; \
-		(elm)->field.tqe_next = (listelm); \
-		*(listelm)->field.tqe_prev = (elm);\
-		(listelm)->field.tqe_prev = &(elm)->field.tqe_next;\
+		(elm)->area.tqe_prev = (listelm)->area.tqe_prev; \
+		(elm)->area.tqe_next = (listelm); \
+		*(listelm)->area.tqe_prev = (elm);\
+		(listelm)->area.tqe_prev = &(elm)->area.tqe_next;\
 	} while (/*CONSTCOND*/ 0)
 
-#define TAILQ_REMOVE(head, elm, field) \
+#define TAILQ_REMOVE(head, elm, area) \
 	do { \
-		if (((elm)->field.tqe_next) != NULL) \
-			(elm)->field.tqe_next->field.tqe_prev = (elm)->field.tqe_prev; \
+		if (((elm)->area.tqe_next) != NULL) \
+			(elm)->area.tqe_next->area.tqe_prev = (elm)->area.tqe_prev; \
 		else \
-			(head)->tqh_last = (elm)->field.tqe_prev;\
-		*(elm)->field.tqe_prev = (elm)->field.tqe_next;\
+			(head)->tqh_last = (elm)->area.tqe_prev;\
+		*(elm)->area.tqe_prev = (elm)->area.tqe_next;\
 	} while (/*CONSTCOND*/ 0)
 
-#define TAILQ_FOREACH(var, head, field)\
-	for ((var) = ((head)->tqh_first); (var); (var) = ((var)->field.tqe_next))
+#define TAILQ_FOREACH(var, head, area)\
+	for ((var) = ((head)->tqh_first); (var); (var) = ((var)->area.tqe_next))
 
-#define TAILQ_FOREACH_REVERSE(var, head, headname, field)\
+#define TAILQ_FOREACH_REVERSE(var, head, headname, area)\
 	for ((var) = (*(((struct headname *)((head)->tqh_last))->tqh_last)); (var);\
-	     (var) = (*(((struct headname *)((var)->field.tqe_prev))->tqh_last)))
+	     (var) = (*(((struct headname *)((var)->area.tqe_prev))->tqh_last)))
 
-#define TAILQ_CONCAT(head1, head2, field)\
+#define TAILQ_CONCAT(head1, head2, area)\
 	do { \
 		if (!TAILQ_EMPTY(head2)) { \
 			*(head1)->tqh_last = (head2)->tqh_first; \
-			(head2)->tqh_first->field.tqe_prev = (head1)->tqh_last;\
+			(head2)->tqh_first->area.tqe_prev = (head1)->tqh_last;\
 			(head1)->tqh_last = (head2)->tqh_last; \
 			TAILQ_INIT((head2)); \
 		}\
@@ -259,9 +261,9 @@
  */
 #define TAILQ_EMPTY(head) ((head)->tqh_first == NULL)
 #define TAILQ_FIRST(head) ((head)->tqh_first)
-#define TAILQ_NEXT(elm, field) ((elm)->field.tqe_next)
+#define TAILQ_NEXT(elm, area) ((elm)->area.tqe_next)
 
 #define TAILQ_LAST(head, headname) (*(((struct headname *)((head)->tqh_last))->tqh_last))
-#define TAILQ_PREV(elm, headname, field) (*(((struct headname *)((elm)->field.tqe_prev))->tqh_last))
+#define TAILQ_PREV(elm, headname, area) (*(((struct headname *)((elm)->area.tqe_prev))->tqh_last))
 
 #endif
