@@ -9,6 +9,7 @@
 static u_long memsize; /* Maximum physical address */
 u_long npage;	       /* Amount of memory(in pages) */
 
+// 存储了当前进程一级页表基地址位于kseg0的虚拟地址。
 Pde *cur_pgdir;
 
 // pages是一个保存了所有页控制模块的数组

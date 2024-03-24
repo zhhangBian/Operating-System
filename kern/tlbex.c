@@ -56,9 +56,18 @@ void _do_tlb_refill(u_long *pentrylo, u_int va, u_int asid) {
 	 *
 	 *  **While** 'page_lookup' returns 'NULL', indicating that the '*ppte' could not be found,
 	 *  allocate a new page using 'passive_alloc' until 'page_lookup' succeeds.
+   * 
+   * 尝试在循环中调用'page_lookup'以查找虚拟地址va在当前进程页表中对应的页表项'*ppte'
+   * 
+   * 如果'page_lookup'返回'NULL'，表明'*ppte'找不到，使用'passive_alloc'为va 所在的虚拟页面分配物理页面，
+   * 直至'page_lookup'返回不为'NULL'则退出循环。
+   * 你可以在调用函数时，使用全局变量cur_pgdir 作为其中一个实参。
 	 */
 
 	/* Exercise 2.9: Your code here. */
+  while (page_lookup(cur_pgdir, va, &ppte) == NULL) {
+		passive_alloc(va, cur_pgdir, asid);
+	}
 
 	ppte = (Pte *)((u_long)ppte & ~0x7);
 	pentrylo[0] = ppte[0] >> 6;
