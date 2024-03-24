@@ -11,7 +11,9 @@ u_long npage;	       /* Amount of memory(in pages) */
 
 Pde *cur_pgdir;
 
+// pages是一个保存了所有页控制模块的数组
 struct Page *pages;
+// 表示可用虚拟内存地址的全局变量
 static u_long freemem;
 
 struct Page_list page_free_list; /* Free list of physical pages */
@@ -22,10 +24,12 @@ struct Page_list page_free_list; /* Free list of physical pages */
  */
 void mips_detect_memory(u_int _memsize) {
 	/* Step 1: Initialize memsize. */
+  // 使用bootloader传递的参数确认物理内存的大小
 	memsize = _memsize;
 
 	/* Step 2: Calculate the corresponding 'npage' value. */
 	/* Exercise 2.1: Your code here. */
+  // 确认页的数量
   npage = memsize / PAGE_SIZE;
 
 	printk("Memory size: %lu KiB, number of pages: %lu\n", memsize / 1024, npage);
@@ -33,14 +37,16 @@ void mips_detect_memory(u_int _memsize) {
 
 /* Lab 2 Key Code "alloc" */
 /* Overview:
-    Allocate `n` bytes physical memory with alignment `align`, if `clear` is set, clear the
+    Allocate `n` bytes physical memory with alignment `align`, if `set_zero` is set, set_zero the
     allocated memory.
     This allocator is used only while setting up virtual memory system.
    Post-Condition:
     If we're out of memory, should panic, else return this address of memory we have allocated.*/
-void *alloc(u_int n, u_int align, int clear) {
+void *alloc(u_int n, u_int align, int set_zero) {
+  // 找到end  . = 0x80400000;   end = . ;
 	extern char end[];
-	u_long alloced_mem;
+	// 本质是一个指针变量
+  u_long alloced_mem;
 
 	/* Initialize `freemem` if this is the first time. The first virtual address that the
 	 * linker did *not* assign to any kernel code or global variables. */
@@ -60,8 +66,8 @@ void *alloc(u_int n, u_int align, int clear) {
 	// Panic if we're out of memory.
 	panic_on(PADDR(freemem) >= memsize);
 
-	/* Step 4: Clear allocated chunk if parameter `clear` is set. */
-	if (clear) {
+	/* Step 4: set_zero allocated chunk if parameter `set_zero` is set. */
+	if (set_zero) {
 		memset((void *)alloced_mem, 0, n);
 	}
 
@@ -79,7 +85,7 @@ void mips_vm_init() {
 	 * for physical memory management. Then, map virtual address `UPAGES` to
 	 * physical address `pages` allocated before. For consideration of alignment,
 	 * you should round up the memory size before map. */
-  //申请了 npage 个 struct Page 大小的内存。并以 页的大小 进行对齐。同时将申请的内存中内容初始化为 0
+  //申请了 npage 个 struct Page 大小的内存。并以 每个页的大小 进行对齐。同时将申请的内存中内容初始化为 0
 	pages = (struct Page *)alloc(npage * sizeof(struct Page), PAGE_SIZE, 1);
 	printk("to memory %x for struct Pages.\n", freemem);
 	printk("pmap.c:\t mips vm init success\n");
@@ -95,15 +101,17 @@ void page_init(void) {
 	/* Step 1: Initialize page_free_list. */
 	/* Hint: Use macro `LIST_INIT` defined in include/queue.h. */
 	/* Exercise 2.3: Your code here. (1/4) */
+  // 创建一个空闲页组成的链表
   LIST_INIT(&page_free_list);
 
 	/* Step 2: Align `freemem` up to multiple of PAGE_SIZE. */
 	/* Exercise 2.3: Your code here. (2/4) */
+  // 将当前已使用的空间进行对其，确定当前已经使用的页
   freemem = ROUND(freemem, PAGE_SIZE);
 
 	/* Step 3: Mark all memory below `freemem` as used (set `pp_ref` to 1) */
 	/* Exercise 2.3: Your code here. (3/4) */
-	u_long page_used = PPN( PADDR( freemem));
+	u_long page_used = PPN(PADDR(freemem));
 	for(u_long i=0; i< page_used; i++) {
 		pages[i].pp_ref = 1;
 	}
@@ -112,6 +120,7 @@ void page_init(void) {
 	/* Exercise 2.3: Your code here. (4/4) */
 	for(u_long i=page_used; i<npage; i++) {
 		pages[i].pp_ref = 0;
+    // 为什么取地址：将地址转换为一个指针变量是方便的
 		LIST_INSERT_HEAD(&page_free_list, &pages[i], pp_link);
 	}
 }

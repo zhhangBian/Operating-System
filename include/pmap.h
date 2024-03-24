@@ -13,6 +13,7 @@ typedef LIST_ENTRY(Page) Page_LIST_entry_t;
 
 // 代表了对虚页的控制变量
 struct Page {
+  // 内部包含一个结构体，是指针的集合：对其保证内存
 	Page_LIST_entry_t pp_link; /* free list link */
 
 	// Ref is the count of pointers (usually in page table entries)
@@ -28,14 +29,15 @@ extern struct Page *pages;
 extern struct Page_list page_free_list;
 
 // 通过指针减法，得到对应的控制块是第几个页
-static inline u_long page2ppn(struct Page *pp) {
-	return pp - pages;
+static inline u_long page2ppn(struct Page *page_point) {
+	return page_point - pages;
 }
 
 // page to physical address
 // 位运算不是本质，本质是 第几个页*页的大小，得到基地址
-static inline u_long page2pa(struct Page *pp) {
-	return page2ppn(pp) << PGSHIFT;
+// 将页表号转换为物理地址
+static inline u_long page2pa(struct Page *page_point) {
+	return page2ppn(page_point) << PGSHIFT;
 }
 
 // 通过物理地址获取对应的页控制块

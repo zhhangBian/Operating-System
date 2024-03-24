@@ -42,9 +42,12 @@ void mips_init(u_int argc, char **argv, char **penv, u_int ram_low_size) {
 	printk("init.c:\tmips_init() is called\n");
 
 	// lab2:
-	// mips_detect_memory(ram_low_size);
-	// mips_vm_init();
-	// page_init();
+  // 检测物理内存大小，确认页的数量
+	mips_detect_memory(ram_low_size);
+  // 初始化虚拟内存：创建了相应数量的页控制模块，所有物理页都有对应的唯一的控制模块
+	mips_vm_init();
+  // 对pages进行初始化，维护空闲页的链表
+	page_init();
 
 	// lab3:
 	// env_init();

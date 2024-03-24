@@ -18,7 +18,9 @@
 
 // Page number field of an address
 // 位运算的背后原因是 页号*页的大小 得到基地址
+// 获取物理地址对应的页表号
 #define PPN(pa) (((u_long)(pa)) >> PGSHIFT)
+// 获取虚拟地址对应的页表号
 #define VPN(va) (((u_long)(va)) >> PGSHIFT)
 
 // Page Table/Directory Entry flags
@@ -152,15 +154,17 @@ extern u_long npage;
 typedef u_long Pde;
 typedef u_long Pte;
 
-#define PADDR(kva)\
+// 将 kseg0 中的虚拟地址转化为物理地址
+#define PADDR(kseg0_virtual_address)\
 	({\
-		u_long _a = (u_long)(kva);\
+		u_long _a = (u_long)(kseg0_virtual_address);\
 		if (_a < ULIM)\
 			panic("PADDR called with invalid kva %08lx", _a);\
 		_a - ULIM;\
 	})
 
 // translates from physical address to kernel virtual address
+// 将物理地址转化为虚拟地址
 #define KADDR(pa)\
 	({\
 		u_long _ppn = PPN(pa);\

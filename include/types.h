@@ -17,7 +17,9 @@ typedef unsigned long u_long;
 	})
 
 /* Rounding; only works for n = power of two */
-#define ROUND(a, n) (((((u_long)(a)) + (n)-1)) & ~((n)-1))
-#define ROUNDDOWN(a, n) (((u_long)(a)) & ~((n)-1))
+// 向上对其，将低位抹0   地址+位数
+#define ROUND(address, n) (((((u_long)(address)) + (n)-1)) & ~((n)-1))
+// 向下对其
+#define ROUNDDOWN(address, n) (((u_long)(address)) & ~((n)-1))
 
 #endif /* !_INC_TYPES_H_ */
