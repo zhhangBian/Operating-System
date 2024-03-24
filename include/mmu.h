@@ -11,8 +11,10 @@
 #define PDMAP (4 * 1024 * 1024) // bytes mapped by a page directory entry
 #define PGSHIFT 12
 #define PDSHIFT 22 // log2(PDMAP)
-#define PDX(va) ((((u_long)(va)) >> PDSHIFT) & 0x03FF)
-#define PTX(va) ((((u_long)(va)) >> PGSHIFT) & 0x03FF)
+// 获取一级页表项 31-22位
+#define PDX(virtual_address) ((((u_long)(virtual_address)) >> PDSHIFT) & 0x03FF)
+// 获取二级页表项 21-12位
+#define PTX(virtual_address) ((((u_long)(virtual_address)) >> PGSHIFT) & 0x03FF)
 #define PTE_ADDR(pte) (((u_long)(pte)) & ~0xFFF)
 #define PTE_FLAGS(pte) (((u_long)(pte)) & 0xFFF)
 
@@ -164,7 +166,7 @@ typedef u_long Pte;
 	})
 
 // translates from physical address to kernel virtual address
-// 将物理地址转化为虚拟地址
+// 将物理地址转化为在kseg0中的虚拟地址
 #define KADDR(pa)\
 	({\
 		u_long _ppn = PPN(pa);\

@@ -28,15 +28,23 @@ NO_SUCH_ENTRY:
 	j       ra
 END(tlb_out)
 
+# 设置参数
+# 使用 NESTED 定义函数标签，表示非叶函数
 NESTED(do_tlb_refill, 24, zero)
+  # 发生 TLB Miss 的虚拟地址
 	mfc0    a1, CP0_BADVADDR
+  # 当前进程的 ASID
 	mfc0    a2, CP0_ENTRYHI
-	andi    a2, a2, 0xff /* ASID is stored in the lower 8 bits of CP0_ENTRYHI */
+  # ASID is stored in the lower 8 bits of CP0_ENTRYHI
+	andi    a2, a2, 0xff
 .globl do_tlb_refill_call;
 do_tlb_refill_call:
-	addi    sp, sp, -24 /* Allocate stack for arguments(3), return value(2), and return address(1) */
+  # Allocate stack for arguments(3), return value(2), and return address(1)
+	addi    sp, sp, -24
+  # 将返回地址存储到 (sp+20) - (sp+23)
 	sw      ra, 20(sp) /* [sp + 20] - [sp + 23] store the return address */
 	addi    a0, sp, 12 /* [sp + 12] - [sp + 19] store the return value */
+  # 跳转到对应的C函数
 	jal     _do_tlb_refill /* (Pte *, u_int, u_int) [sp + 0] - [sp + 11] reserved for 3 args */
 	lw      a0, 12(sp) /* Return value 0 - Even page table entry */
 	lw      a1, 16(sp) /* Return value 1 - Odd page table entry */
@@ -47,6 +55,7 @@ do_tlb_refill_call:
 	nop
 	/* Hint: use 'tlbwr' to write CP0.EntryHi/Lo into a random tlb entry. */
 	/* Exercise 2.10: Your code here. */
+  tlbwr
 
 	jr      ra
 END(do_tlb_refill)

@@ -10,8 +10,10 @@
  *   Construct a new Entry HI and call 'tlb_out' to flush TLB.
  *   'tlb_out' is defined in mm/tlb_asm.S
  */
-void tlb_invalidate(u_int asid, u_long va) {
-	tlb_out((va & ~GENMASK(PGSHIFT, 0)) | (asid & (NASID - 1)));
+// 更新页表后将TLB对应的项无效，保证虚拟-物理地址映射的正确，下次访问时触发TLB重填
+void tlb_invalidate(u_int asid, u_long virtual_address) {
+  // 调用相应的汇编函数
+	tlb_out((virtual_address & ~GENMASK(PGSHIFT, 0)) | (asid & (NASID - 1)));
 }
 /* End of Key Code "tlb_invalidate" */
 
