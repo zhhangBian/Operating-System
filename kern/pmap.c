@@ -286,6 +286,7 @@ int page_insert(Pde *pgdir, u_int asid, struct Page *pp, u_long va, u_int perm) 
 	/* Exercise 2.7: Your code here. (3/3) */
   // 建立二级页表项到物理页的联系即可。
   // 只需修改二级页表项的内容，修改为物理页的物理地址和权限设置即可。同时递增页控制块的引用计数。
+  //*pte = page2pa(pp) | perm | PTE_C_CACHEABLE | PTE_V;
   *pte = page2pa(pp) | perm | PTE_C_CACHEABLE | PTE_V;
 	pp->pp_ref++;
 

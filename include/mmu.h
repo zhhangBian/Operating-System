@@ -66,6 +66,7 @@
 #define PTE_D (0x0004 << PTE_HARDFLAG_SHIFT)
 
 // Cache Coherency Attributes bit.
+// PTE_C_CACHEABLE 用于配置对应页面的访问属性为可缓存，一般对于所有物理内存页面，都将其配置为可缓存，以允许 CPU 使用 Cache 缓存加速对这些页面的访存请求。
 #define PTE_C_CACHEABLE (0x0018 << PTE_HARDFLAG_SHIFT)
 #define PTE_C_UNCACHEABLE (0x0010 << PTE_HARDFLAG_SHIFT)
 
