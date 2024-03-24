@@ -201,9 +201,8 @@ static int pgdir_walk(Pde *pgdir, u_long va, int create, Pte **ppte) {
   pgdir_entryp = pgdir + PDX(va);
 
 	/* Step 2: If the corresponding page table is not existent (valid) then:
-	 *   * If parameter `create` is set, create one. Set the permission bits 'PTE_C_CACHEABLE |
-		neg_flag = 0;
-	 *     PTE_V' for this new page in the page directory. If failed to allocate a new page (out
+	 *   * If parameter `create` is set, create one. Set the permission bits 'PTE_C_CACHEABLE | 
+   *     PTE_V' for this new page in the page directory. If failed to allocate a new page (out
 	 *     of memory), return the error.
 	 *   * Otherwise, assign NULL to '*ppte' and return 0.
 	 */
@@ -218,7 +217,7 @@ static int pgdir_walk(Pde *pgdir, u_long va, int create, Pte **ppte) {
 				return -E_NO_MEM;
 			}
 			pp->pp_ref++;
-			*pgdir_entryp = page2pa(pp) | PTE_D | PTE_C_CACHEABLE | PTE_V;
+			*pgdir_entryp = page2pa(pp) | PTE_C_CACHEABLE | PTE_V;
 		} else {
 			*ppte = NULL;
 			return 0;
@@ -287,7 +286,7 @@ int page_insert(Pde *pgdir, u_int asid, struct Page *pp, u_long va, u_int perm) 
   // 建立二级页表项到物理页的联系即可。
   // 只需修改二级页表项的内容，修改为物理页的物理地址和权限设置即可。同时递增页控制块的引用计数。
   *pte = page2pa(pp) | perm | PTE_C_CACHEABLE | PTE_V;
-	pp->pp_ref++;
+	(pp->pp_ref)++;
 
 	return 0;
 }
@@ -482,8 +481,6 @@ void page_check(void) {
 	// free pp0 and try again: pp0 should be used for page table
 	page_free(pp0);
 	assert(page_insert(boot_pgdir, 0, pp1, 0x0, 0) == 0);
-  printk("%d",PTE_FLAGS(boot_pgdir[0]));
-  printk("%d",(PTE_C_CACHEABLE | PTE_V));
 	assert(PTE_FLAGS(boot_pgdir[0]) == (PTE_C_CACHEABLE | PTE_V));
 	assert(PTE_ADDR(boot_pgdir[0]) == page2pa(pp0));
 	assert(PTE_FLAGS(*(Pte *)page2kva(pp0)) == (PTE_C_CACHEABLE | PTE_V));
