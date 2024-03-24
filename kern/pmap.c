@@ -218,8 +218,7 @@ static int pgdir_walk(Pde *pgdir, u_long va, int create, Pte **ppte) {
 				return -E_NO_MEM;
 			}
 			pp->pp_ref++;
-			// *pgdir_entryp = page2pa(pp) | PTE_D | PTE_C_CACHEABLE | PTE_V;
-      *pgdir_entryp = page2pa(pp) | PTE_D | PTE_V;
+			*pgdir_entryp = page2pa(pp) | PTE_D | PTE_C_CACHEABLE | PTE_V;
 		} else {
 			*ppte = NULL;
 			return 0;
@@ -359,6 +358,7 @@ void page_remove(Pde *pgdir, u_int asid, u_long va) {
 	page_decref(pp);
 
 	/* Step 3: Flush TLB. */
+  // 因为对页表进行了修改，需要调用 tlb_invalidate 确保 TLB 中不保留原有内容。
 	*pte = 0;
 	tlb_invalidate(asid, va);
 	return;
@@ -482,6 +482,8 @@ void page_check(void) {
 	// free pp0 and try again: pp0 should be used for page table
 	page_free(pp0);
 	assert(page_insert(boot_pgdir, 0, pp1, 0x0, 0) == 0);
+  printk("%d",PTE_FLAGS(boot_pgdir[0]));
+  printk("%d",(PTE_C_CACHEABLE | PTE_V));
 	assert(PTE_FLAGS(boot_pgdir[0]) == (PTE_C_CACHEABLE | PTE_V));
 	assert(PTE_ADDR(boot_pgdir[0]) == page2pa(pp0));
 	assert(PTE_FLAGS(*(Pte *)page2kva(pp0)) == (PTE_C_CACHEABLE | PTE_V));
