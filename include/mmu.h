@@ -15,6 +15,7 @@
 #define PDX(virtual_address) ((((u_long)(virtual_address)) >> PDSHIFT) & 0x03FF)
 // 获取二级页表项 21-12位
 #define PTX(virtual_address) ((((u_long)(virtual_address)) >> PGSHIFT) & 0x03FF)
+// 返回页目录项对应的二级页表的基地址，低12位抹0
 #define PTE_ADDR(pte) (((u_long)(pte)) & ~0xFFF)
 #define PTE_FLAGS(pte) (((u_long)(pte)) & 0xFFF)
 
@@ -51,13 +52,17 @@
 
 // Global bit. When the G bit in a TLB entry is set, that TLB entry will match solely on the VPN
 // field, regardless of whether the TLB entry’s ASID field matches the value in EntryHi.
+// 全局位，若某页表项的全局位为1，则TLB仅通过虚页号匹配表项，而不匹配ASID，将用于映射pages和envs到用户空间。
 #define PTE_G (0x0001 << PTE_HARDFLAG_SHIFT)
 
 // Valid bit. If 0 any address matching this entry will cause a tlb miss exception (TLBL/TLBS).
+// 有效位，若某页表项的有效位为1，则该页表项有效，其中高20位就是对应的物理页号。
+// 如果为0则任何地址都会引发缺页中断
 #define PTE_V (0x0002 << PTE_HARDFLAG_SHIFT)
 
 // Dirty bit, but really a write-enable bit. 1 to allow writes, 0 and any store using this
 // translation will cause a tlb mod exception (TLB Mod).
+// 可写位，若某页表项的可写位为1，则允许经由该页表项对物理页进行写操作。
 #define PTE_D (0x0004 << PTE_HARDFLAG_SHIFT)
 
 // Cache Coherency Attributes bit.
@@ -65,9 +70,11 @@
 #define PTE_C_UNCACHEABLE (0x0010 << PTE_HARDFLAG_SHIFT)
 
 // Copy On Write. Reserved for software, used by fork.
+// 写时复制位，用于实现fork 的写时复制机制。
 #define PTE_COW 0x0001
 
 // Shared memmory. Reserved for software, used by fork.
+// 共享页面位，用于实现管道机制。
 #define PTE_LIBRARY 0x0002
 
 // Memory segments (32-bit kernel mode addresses)
@@ -153,7 +160,9 @@
 
 extern u_long npage;
 
+// 一级页表项类型
 typedef u_long Pde;
+// 二级页表项类型
 typedef u_long Pte;
 
 // 将 kseg0 中的虚拟地址转化为物理地址
