@@ -15,13 +15,14 @@
 // size为文件大小
 // binary为申请到的空间，大小为size+1
 int is_elf_format(const void *binary, size_t size) {
+  // 得到存储文件信息的指针
 	Elf32_Ehdr *ehdr = (Elf32_Ehdr *)binary;
 	// 通过魔数进行确认
 	return size >= sizeof(Elf32_Ehdr) && 
-		   ehdr->e_ident[EI_MAG0] == ELFMAG0 &&
-	       ehdr->e_ident[EI_MAG1] == ELFMAG1 && 
-		   ehdr->e_ident[EI_MAG2] == ELFMAG2 &&
-	       ehdr->e_ident[EI_MAG3] == ELFMAG3;
+         ehdr->e_ident[EI_MAG0] == ELFMAG0 &&
+         ehdr->e_ident[EI_MAG1] == ELFMAG1 && 
+         ehdr->e_ident[EI_MAG2] == ELFMAG2 &&
+         ehdr->e_ident[EI_MAG3] == ELFMAG3;
 }
 
 /* Overview:
@@ -36,6 +37,7 @@ int is_elf_format(const void *binary, size_t size) {
  */
 
 int readelf(const void *binary, size_t size) {
+  // ehdr是文件头指针
 	Elf32_Ehdr *ehdr = (Elf32_Ehdr *)binary;
 
 	// Check whether `binary` is a ELF file.
@@ -44,14 +46,20 @@ int readelf(const void *binary, size_t size) {
 		return -1;
 	}
 
-	// Get the address of the section table, the number of section headers and the size of a
-	// section header.
+	// Get:
+  // - the address of the section table
+  // - the number of section headers
+  // - the size of a section header.
+  // 获取的是节头表：记录了该节程序的代码段、数据段等各个段的内容
 	const void *sh_table;
 	Elf32_Half sh_entry_count;
 	Elf32_Half sh_entry_size;
 	/* Exercise 1.1: Your code here. (1/2) */
+  // 通过偏移量得到节头表
 	sh_table = binary + ehdr->e_shoff;
+  // 得到节头表表项数
 	sh_entry_count = ehdr->e_shnum;
+  // 每一节表项的大小
 	sh_entry_size = ehdr->e_shentsize;
 
 	// For each section header, output its index and the section address.

@@ -57,20 +57,35 @@ typedef uint32_t Elf32_Symndx;
 
 #define EI_NIDENT (16)
 
+// 存储ELF文件信息的结构体
 typedef struct {
+  // 魔数和其他信息
 	unsigned char e_ident[EI_NIDENT]; /* Magic number and other info */
+  // 文件类型
 	Elf32_Half e_type;		  /* Object file type */
+  // 机器架构
 	Elf32_Half e_machine;		  /* Architecture */
+  // 文件版本
 	Elf32_Word e_version;		  /* Object file version */
+  // 入口点的虚拟地址
 	Elf32_Addr e_entry;		  /* Entry point virtual address */
+  // 程序头表所在处与此文件头的偏移
 	Elf32_Off e_phoff;		  /* Program header table file offset */
+  // 节头表所在处与此文件头的偏移
 	Elf32_Off e_shoff;		  /* Section header table file offset */
+  // 针对处理器的标记
 	Elf32_Word e_flags;		  /* Processor-specific flags */
+  // ELF 文件头的大小（单位为字节）
 	Elf32_Half e_ehsize;		  /* ELF header size in bytes */
+  // 程序头表表项大小
 	Elf32_Half e_phentsize;		  /* Program header table entry size */
+  // 程序头表表项数
 	Elf32_Half e_phnum;		  /* Program header table entry count */
+  // 节头表表项大小：不是节的大小
 	Elf32_Half e_shentsize;		  /* Section header table entry size */
+  // 节头表表项数
 	Elf32_Half e_shnum;		  /* Section header table entry count */
+  // 节头字符串编号
 	Elf32_Half e_shstrndx;		  /* Section header string table index */
 } Elf32_Ehdr;
 
@@ -91,6 +106,8 @@ typedef struct {
 #define ELFMAG3 'F' /* Magic number byte 3 */
 
 /* Section segment header.  */
+// 相关节的结构
+// 节和段都是信息的集合
 typedef struct {
 	Elf32_Word sh_name;	 /* Section name */
 	Elf32_Word sh_type;	 /* Section type */
