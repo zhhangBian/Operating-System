@@ -1,6 +1,14 @@
 #include "elf.h"
 #include <stdio.h>
 
+// 32位大小端转换
+#define REVERSE_32(n) \
+    ((((n)&0xff) << 24) | (((n)&0xff00) << 8) | (((n) >> 8) & 0xff00) | (((n) >> 24) & 0xff))
+
+// 16位大小端转换
+#define REVERSE_16(n) \
+    ((((n)&0xff) << 8) | (((n) >> 8) & 0xff))
+
 /* Overview:
  *   Check whether specified buffer is valid ELF data.
  *
@@ -36,6 +44,8 @@ int is_elf_format(const void *binary, size_t size) {
  *   If success, output the address of every section in ELF.
  */
 
+// 默认是小端存储文件
+// 大小端转换用到的数据都需要转换：节中存储的信息
 int readelf(const void *binary, size_t size) {
   // ehdr是文件头指针
 	Elf32_Ehdr *ehdr = (Elf32_Ehdr *)binary;
@@ -70,6 +80,8 @@ int readelf(const void *binary, size_t size) {
 		/* Exercise 1.1: Your code here. (2/2) */
 		shdr = sh_table + i*sh_entry_size;
 		addr = shdr->sh_addr;
+    // int offest = shdr->sh_offset;
+    // int allign = shdr->sh_addralign;
 
 		printf("%d:0x%x\n", i, addr);
 	}
