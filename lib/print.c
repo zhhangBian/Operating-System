@@ -347,6 +347,7 @@ int vscanfmt(scan_callback_t in, void *data, const char *fmt, va_list ap) {
 					while(ch) {
 						*cp=ch;
 						cp++;
+						in(data, &ch, 1);
 					}
 					*cp=0;
 
