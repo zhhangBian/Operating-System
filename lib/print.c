@@ -7,11 +7,20 @@ static void print_char(fmt_callback_t, void *, char, int, int);
 static void print_str(fmt_callback_t, void *, const char *, int, int);
 static void print_num(fmt_callback_t, void *, unsigned long, int, int, int, int, char, int);
 
+#define PRINT_char(x) print_char(out, data, (x), 1, ladjust)
+
 void vprintfmt(fmt_callback_t out, void *data, const char *fmt, va_list ap) {
 	char c;
 	const char *s;
 	long num;
+	long x;
+	long y;
+	long z;
+	int flag_x;
+	int flag_y;
 	
+	// if P
+	int flag_p;
 	// 标记输出宽度
 	int width;
 	// 是否为long型
@@ -61,6 +70,39 @@ void vprintfmt(fmt_callback_t out, void *data, const char *fmt, va_list ap) {
 		}
 
 		switch (*fmt) {
+		case 'P':
+			if(long_flag) {
+				x = va_arg(ap, long int);
+				y = va_arg(ap, long int);
+			}
+			else {
+				x = va_arg(ap, int);
+				y = va_arg(ap, int);
+			}
+
+			z = (x+y)*(x-y);
+			z = (z<0) ? -z : z;
+
+			flag_x=0;
+			flag_y=0;
+			if(x<0) {
+				flag_x=1;
+				x=-1*x;
+			}
+			if(y<0) {
+				flag_y=1;
+				y=-1*y;
+			}
+			
+			PRINT_char('(');
+			print_num(out, data, x, 10, flag_x, width, ladjust, padc, 0);
+			PRINT_char(',');
+			print_num(out, data, y, 10, flag_y, width, ladjust,padc, 0);
+			PRINT_char(',');
+			print_num(out, data, z, 10, 0, width, ladjust,padc,0);
+			PRINT_char(')');
+
+			break;
 		case 'b':
 			if (long_flag) {
 				num = va_arg(ap, long int);
