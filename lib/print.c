@@ -292,26 +292,7 @@ int vscanfmt(scan_callback_t in, void *data, const char *fmt, va_list ap) {
 					// get point of address
 					ip = (int *)va_arg(ap, int *);
 					base = 10;
-					in(data, &ch, 1);
-
-					if(ch=='-') {
-						neg=1;
-						in(data, &ch, 1);
-						num = ch-'0';
-					}
-					else {
-						neg=0;
-						num = ch-'0';
-					}
-					while(IsDigit(ch)) {
-						in(data, &ch, 1);
-						num = num*base + ch-'0';
-					}
-					num = neg ? -1*num :num;
-
-					break;
 				case 'x':
-					ip = (int *)va_arg(ap, char *);
 					base = 16;
 					in(data, &ch, 1);
 					
@@ -329,6 +310,7 @@ int vscanfmt(scan_callback_t in, void *data, const char *fmt, va_list ap) {
 						num = num*base + ch-'0';
 					}
 					num = neg ? -1*num : num;
+					*ip=num;
 
 					break;
 				case 'c':
