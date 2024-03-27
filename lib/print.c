@@ -293,7 +293,7 @@ int vscanfmt(scan_callback_t in, void *data, const char *fmt, va_list ap) {
 					ip = (int *)va_arg(ap, int *);
 					num=0;
 					base = 10;
-					in(data, &ch,1);
+					
 					if(ch=='-') {
 						neg=1;
 						in(data, &ch, 1);
@@ -314,7 +314,7 @@ int vscanfmt(scan_callback_t in, void *data, const char *fmt, va_list ap) {
 					ip = (int *)va_arg(ap, int *);
 					num=0;
 					base = 16;
-					in(data, &ch, 1);
+					
 					if(ch=='-') {
 						neg=1;
 						in(data, &ch, 1);
@@ -338,12 +338,12 @@ int vscanfmt(scan_callback_t in, void *data, const char *fmt, va_list ap) {
 					break;
 				case 'c':
 					cp = (char *)va_arg(ap, char *);
-					in(data,cp,1);
+					*cp=ch;
 
 					break;
 				case 's':
 					cp = (char *)va_arg(ap, char *);
-					in(data, &ch, 1);
+					
 					while(ch) {
 						*cp=ch;
 						cp++;
