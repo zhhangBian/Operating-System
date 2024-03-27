@@ -271,3 +271,85 @@ void print_num(fmt_callback_t out, void *data, unsigned long u, int base, int ne
 
 	out(data, buf, length);
 }
+
+int vscanfmt(scan_callback_t in, void *data, const char *fmt, va_list ap) {
+	int *ip;
+	char *cp;
+	char ch;
+	int base, num, neg, ret=0;
+	//ret is the num of var
+	while(*fmt) {
+		if(*fmt=='%') {
+			ret++;
+			fmt++;	// jump %
+			
+			do {
+				in(data, &ch, 1);
+			} while(ch==' ' || ch=='\t' || ch=='\n');	//jump blank
+			// now ch is the first vavild
+			switch(*fmt) {
+				case 'd':
+					// get point of address
+					ip = (int *)va_arg(ap, int *);
+					base = 10;
+					in(data, &ch, 1);
+
+					if(ch=='-') {
+						neg=1;
+						in(data, &ch, 1);
+						num = ch-'0';
+					}
+					else {
+						neg=0;
+						num = ch-'0';
+					}
+					while(IsDigit(ch)) {
+						in(data, &ch, 1);
+						num = num*base + ch-'0';
+					}
+					num = neg ? -1*num :num;
+
+					break;
+				case 'x':
+					ip = (int *)va_arg(ap, char *);
+					base = 16;
+					in(data, &ch, 1);
+					
+					if(ch=='-') {
+						neg=1;
+						in(data, &ch, 1);
+						num = ch-'0';
+					}
+					else {
+						neg=0;
+						num = ch-'0';
+					}
+					while(IsDigit(ch)) {
+						in(data, &ch, 1);
+						num = num*base + ch-'0';
+					}
+					num = neg ? -1*num : num;
+
+					break;
+				case 'c':
+					cp = (char *)va_arg(ap, char *);
+					in(data,cp,1);
+
+					break;
+				case 's':
+					cp = (char *)va_arg(ap, char *);
+					in(data, &ch, 1);
+					while(ch) {
+						*cp=ch;
+						cp++;
+					}
+					*cp=0;
+
+					break;
+			}
+			fmt++;
+		}
+	}
+	
+	return ret;
+}
