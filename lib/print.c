@@ -1,5 +1,7 @@
 #include <print.h>
 
+#define IsDigit(x) (((x) >= '0') && ((x) <= '9'))
+
 /* forward declaration */
 static void print_char(fmt_callback_t, void *, char, int, int);
 static void print_str(fmt_callback_t, void *, const char *, int, int);
@@ -21,27 +23,15 @@ void vprintfmt(fmt_callback_t out, void *data, const char *fmt, va_list ap) {
 	// 填充多余位置所用字符
 	char padc;     // padding char
 
-	for (;;) {
-		/* scan for the next '%' */
-		/* Exercise 1.4: Your code here. (1/8) */
-    if(*fmt==0)
-      break;
-    
+	for (;*fmt;) {
 		if (*fmt!='%') {
 			print_char(out,data,(*fmt),1,0);
 			fmt++;
 			continue;
 		}
 
-		/* flush the string found so far */
-		/* Exercise 1.4: Your code here. (2/8) */
-
-		/* check "are we hitting the end?" */
-		/* Exercise 1.4: Your code here. (3/8) */
-
-		/* we found a '%' */
-		/* Exercise 1.4: Your code here. (4/8) */
 		fmt++;
+
 		width=0;
 		long_flag=0;
 		neg_flag=0;
@@ -59,16 +49,12 @@ void vprintfmt(fmt_callback_t out, void *data, const char *fmt, va_list ap) {
 			fmt++;
 		}
 
-		/* get width */
-		/* Exercise 1.4: Your code here. (6/8) */
-		while ((*fmt)>='0' && (*fmt)<='9')
+		while (IsDigit(*fmt))
 		{
-			width=width*10+(*fmt)-'0';
+			width=width*10+(*fmt-'0');
 			fmt++;
 		}
 
-		/* check for long */
-		/* Exercise 1.4: Your code here. (7/8) */
 		if(*fmt=='l') {
 			long_flag=1;
 			fmt++;

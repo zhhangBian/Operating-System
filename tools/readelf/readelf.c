@@ -51,19 +51,20 @@ int readelf(const void *binary, size_t size) {
 	Elf32_Ehdr *ehdr = (Elf32_Ehdr *)binary;
 
 	// Check whether `binary` is a ELF file.
+  // 检查是否为ELF文件格式
 	if (!is_elf_format(binary, size)) {
 		fputs("not an elf file\n", stderr);
 		return -1;
 	}
 
-	// Get:
+	// Get: 获取的是节头表表项：记录了该节程序的代码段、数据段等各个段的内容
   // - the address of the section table
   // - the number of section headers
   // - the size of a section header.
-  // 获取的是节头表：记录了该节程序的代码段、数据段等各个段的内容
 	const void *sh_table;
 	Elf32_Half sh_entry_count;
 	Elf32_Half sh_entry_size;
+  
 	/* Exercise 1.1: Your code here. (1/2) */
   // 通过偏移量得到节头表
 	sh_table = binary + ehdr->e_shoff;
