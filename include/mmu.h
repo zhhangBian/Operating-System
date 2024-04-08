@@ -6,17 +6,21 @@
  */
 
 #define NASID 256
+// PAGE_SIZE 为 页 对应的字节大小
 #define PAGE_SIZE 4096
 #define PTMAP PAGE_SIZE
 #define PDMAP (4 * 1024 * 1024) // bytes mapped by a page directory entry
 #define PGSHIFT 12
 #define PDSHIFT 22 // log2(PDMAP)
+
 // 获取一级页表项 31-22位
 #define PDX(virtual_address) ((((u_long)(virtual_address)) >> PDSHIFT) & 0x03FF)
 // 获取二级页表项 21-12位
 #define PTX(virtual_address) ((((u_long)(virtual_address)) >> PGSHIFT) & 0x03FF)
-// 返回页目录项对应的二级页表的基地址，低12位抹0
+
+// 返回页目录对应的二级页表的基地址，低12位抹0
 #define PTE_ADDR(pte) (((u_long)(pte)) & ~0xFFF)
+// 返回页内偏移量
 #define PTE_FLAGS(pte) (((u_long)(pte)) & 0xFFF)
 
 // Page number field of an address
@@ -161,12 +165,14 @@
 
 extern u_long npage;
 
-// 一级页表项类型
+// 一二级页表项的结构均为  20物理地址 + 12权限位
+// 一级页表项类型  page dictionary  页目录  31-22位
 typedef u_long Pde;
-// 二级页表项类型
+// 二级页表项类型  page table  页表  21-12位
 typedef u_long Pte;
 
 // 将 kseg0 中的虚拟地址转化为物理地址
+// a - ULIM 等价于最高三位抹零
 #define PADDR(kseg0_virtual_address)\
 	({\
 		u_long _a = (u_long)(kseg0_virtual_address);\

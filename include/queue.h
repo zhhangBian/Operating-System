@@ -47,7 +47,8 @@
  * elements to be linked into the list.
  */
 
-// 表示创建一个元素类型为 node 的链表，这个链表类型名为 name，链表的形式为包含一个指向head元素的指针
+// 表示创建一个元素类型为 node 的链表
+// 这个链表名为 list_name，链表的形式为包含一个指向head元素的指针
 #define LIST_HEAD(list_name, node)\
 	struct list_name {\
 		struct node *lh_first; /* first element */\
@@ -87,6 +88,7 @@
 /*
  * Return the first element in the list named "head".
  */
+// 获取空闲页链表的第一个节点
 #define LIST_FIRST(list) ((list)->lh_first)
 
 /*
@@ -100,6 +102,7 @@
 /*
  * Reset the list named "head" to the empty list.
  */
+// 获取链表的头节点，将其设置为NULL
 #define LIST_INIT(list)\
 	do {\
 		LIST_FIRST((list)) = NULL;\
@@ -110,36 +113,38 @@
 #define LIST_NEXT(elm, point_area) ((elm)->point_area.le_next)
 
 /*
- * Insert the element 'elm' *after* 'listelm' which is already in the list. The 'point_area'
+ * Insert the element 'elm' *after* 'list_elm_to_operate' which is already in the list. The 'point_area'
  * name is the link element as above.
  *
  * Hint:
- * Step 1: assign 'elm.next' from 'listelm.next'.
- * Step 2: if 'listelm.next' is not NULL, then assign 'listelm.next.pre' from a proper value.
- * Step 3: assign 'listelm.next' from a proper value.
+ * Step 1: assign 'elm.next' from 'list_elm_to_operate.next'.
+ * Step 2: if 'list_elm_to_operate.next' is not NULL, then assign 'list_elm_to_operate.next.pre' from a proper value.
+ * Step 3: assign 'list_elm_to_operate.next' from a proper value.
  * Step 4: assign 'elm.pre' from a proper value.
  */
 // 由于是双向链表，要判断是否有下一个元素
-#define LIST_INSERT_AFTER(listelm, elm, point_area) \
-	/* Exercise 2.2: Your code here. */\
+#define LIST_INSERT_AFTER(list_elm_to_operate, elm, point_area) \
   do {\
-		if ((LIST_NEXT((elm), point_area) = LIST_NEXT((listelm), point_area)) != NULL)\
-			LIST_NEXT((listelm), point_area)->point_area.le_prev = &LIST_NEXT((elm), point_area); \
-    LIST_NEXT((listelm), point_area) = (elm);\
-    (elm)->point_area.le_prev = &LIST_NEXT((listelm), point_area);\
+    LIST_NEXT((elm), point_area) = LIST_NEXT((list_elm_to_operate), point_area);\
+    if((LIST_NEXT((elm), point_area)) != NULL) {\
+      LIST_NEXT((list_elm_to_operate), point_area)->point_area.le_prev = &LIST_NEXT((elm), point_area);\
+    }\
+    LIST_NEXT((list_elm_to_operate), point_area) = (elm);\
+    (elm)->point_area.le_prev = &LIST_NEXT((list_elm_to_operate), point_area);\
 	} while (0)
 
 /*
- * Insert the element "elm" *before* the element "listelm" which is
+ * Insert the element "elm" *before* the element "list_elm_to_operate" which is
  * already in the list.  The "point_area" name is the link element
  * as above.
  */
-#define LIST_INSERT_BEFORE(listelm, elm, point_area)\
+// 插入元素只要更新前一个元素的后向指针更新：*(list_elm_to_operate)->point_area.le_prev = (elm);
+#define LIST_INSERT_BEFORE(list_elm_to_operate, elm, point_area)\
 	do {\
-		(elm)->point_area.le_prev = (listelm)->point_area.le_prev;\
-		LIST_NEXT((elm), point_area) = (listelm);\
-		*(listelm)->point_area.le_prev = (elm);\
-		(listelm)->point_area.le_prev = &LIST_NEXT((elm), point_area);\
+		(elm)->point_area.le_prev = (list_elm_to_operate)->point_area.le_prev;\
+		LIST_NEXT((elm), point_area) = (list_elm_to_operate);\
+		*(list_elm_to_operate)->point_area.le_prev = (elm);\
+		(list_elm_to_operate)->point_area.le_prev = &LIST_NEXT((elm), point_area);\
 	} while (0)
 
 /*
@@ -148,7 +153,8 @@
  */
 #define LIST_INSERT_HEAD(list, elm, point_area) \
 	do { \
-		if ((LIST_NEXT((elm), point_area) = LIST_FIRST((list))) != NULL) \
+    LIST_NEXT((elm), point_area) = LIST_FIRST((list));\
+		if (LIST_FIRST((list)) != NULL) \
 			LIST_FIRST((list))->point_area.le_prev = &LIST_NEXT((elm), point_area); \
 		LIST_FIRST((list)) = (elm); \
 		(elm)->point_area.le_prev = &LIST_FIRST((list)); \
@@ -158,6 +164,7 @@
  * Remove the element "elm" from the list.
  * The "point_area" name is the link element as above.
  */
+// 仅通过指针就能在链表中移除自身
 #define LIST_REMOVE(elm, point_area) \
 	do { \
 		if (LIST_NEXT((elm), point_area) != NULL) \
@@ -212,22 +219,22 @@
 		(head)->tqh_last = &(elm)->point_area.tqe_next; \
 	} while (/*CONSTCOND*/ 0)
 
-#define TAILQ_INSERT_AFTER(head, listelm, elm, point_area)\
+#define TAILQ_INSERT_AFTER(head, list_elm_to_operate, elm, point_area)\
 	do { \
-		if (((elm)->point_area.tqe_next = (listelm)->point_area.tqe_next) != NULL) \
+		if (((elm)->point_area.tqe_next = (list_elm_to_operate)->point_area.tqe_next) != NULL) \
 			(elm)->point_area.tqe_next->point_area.tqe_prev = &(elm)->point_area.tqe_next;\
 		else \
 			(head)->tqh_last = &(elm)->point_area.tqe_next; \
-		(listelm)->point_area.tqe_next = (elm); \
-		(elm)->point_area.tqe_prev = &(listelm)->point_area.tqe_next;\
+		(list_elm_to_operate)->point_area.tqe_next = (elm); \
+		(elm)->point_area.tqe_prev = &(list_elm_to_operate)->point_area.tqe_next;\
 	} while (/*CONSTCOND*/ 0)
 
-#define TAILQ_INSERT_BEFORE(listelm, elm, point_area) \
+#define TAILQ_INSERT_BEFORE(list_elm_to_operate, elm, point_area) \
 	do { \
-		(elm)->point_area.tqe_prev = (listelm)->point_area.tqe_prev; \
-		(elm)->point_area.tqe_next = (listelm); \
-		*(listelm)->point_area.tqe_prev = (elm);\
-		(listelm)->point_area.tqe_prev = &(elm)->point_area.tqe_next;\
+		(elm)->point_area.tqe_prev = (list_elm_to_operate)->point_area.tqe_prev; \
+		(elm)->point_area.tqe_next = (list_elm_to_operate); \
+		*(list_elm_to_operate)->point_area.tqe_prev = (elm);\
+		(list_elm_to_operate)->point_area.tqe_prev = &(elm)->point_area.tqe_next;\
 	} while (/*CONSTCOND*/ 0)
 
 #define TAILQ_REMOVE(head, elm, point_area) \

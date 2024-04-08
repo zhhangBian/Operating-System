@@ -8,13 +8,15 @@
 
 extern Pde *cur_pgdir;
 
+// 创建一个名为Page_list，元素类型为Page的链表
+// struct Page_list { struct Page *lh_first; }
 LIST_HEAD(Page_list, Page);
 typedef LIST_ENTRY(Page) Page_LIST_entry_t;
 
 // 代表了对虚页的控制变量
 struct Page {
-  // 内部包含一个结构体，是指针的集合：对其保证内存
-	Page_LIST_entry_t pp_link; /* free list link */
+  // 内部包含一个结构体，管理指针：包括前向和后向指针
+	Page_LIST_entry_t pp_link;
 
 	// Ref is the count of pointers (usually in page table entries)
 	// to this page.  This only holds for pages allocated using
@@ -29,15 +31,14 @@ extern struct Page *pages;
 extern struct Page_list page_free_list;
 
 // 通过指针减法，得到对应的控制块是第几个页
-static inline u_long page2ppn(struct Page *page_point) {
-	return page_point - pages;
+static inline u_long page2ppn(struct Page *page_pointer) {
+	return page_pointer - pages;
 }
 
 // page to physical address
-// 位运算不是本质，本质是 第几个页*页的大小，得到基地址
-// 将页表号转换为物理地址
-static inline u_long page2pa(struct Page *page_point) {
-	return page2ppn(page_point) << PGSHIFT;
+// 获取页控制块控制页面对应的物理地址
+static inline u_long page2pa(struct Page *page_pointer) {
+	return page2ppn(page_pointer) << PGSHIFT;
 }
 
 // 通过物理地址获取对应的页控制块
@@ -48,8 +49,9 @@ static inline struct Page *pa2page(u_long pa) {
 	return &pages[PPN(pa)];
 }
 
-static inline u_long page2kva(struct Page *pp) {
-	return KADDR(page2pa(pp));
+// 获取页控制块控制页面对应的在kseg0中的虚拟地址
+static inline u_long page2kva(struct Page *page_pointer) {
+	return KADDR(page2pa(page_pointer));
 }
 
 static inline u_long va2pa(Pde *pgdir, u_long va) {
