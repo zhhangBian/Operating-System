@@ -191,17 +191,8 @@ void page_free(struct Page *page_pointer) {
 // 实现查找对应虚拟地址对应的（二级）页表项，根据if_create判断在原先没有分配页的是否分配一页
 static int pgdir_walk(Pde *pde_base, u_long virtural_address, int if_create, Pte **pte_pointer) {
 	struct Page *page_pointer;
-
-	/* Step 1: Get the corresponding page directory entry. */
   // 虚拟地址对应的 页目录
   Pde *pde = pde_base + PDX(virtural_address);
-
-	/* Step 2: If the corresponding page table is not existent (valid) then:
-	 *   * If parameter `create` is set, create one. Set the permission bits 'PTE_C_CACHEABLE | 
-   *     PTE_V' for this new page in the page directory. If failed to allocate a new page (out
-	 *     of memory), return the error.
-	 *   * Otherwise, assign NULL to '*ppte' and return 0.
-	 */
 
   // 判断页目录是否有对应二级页表是否有效
   // 如果无效
@@ -221,7 +212,6 @@ static int pgdir_walk(Pde *pde_base, u_long virtural_address, int if_create, Pte
 		}
 	}
 
-	/* Step 3: Assign the kernel virtual address of the page table entry to '*ppte'. */
   // 获取虚拟地址对应的页表的基地址： 页目录对应的二级页表基地址 -> 虚拟地址 
   Pte *pte_base = (Pte *)KADDR(PTE_ADDR(*pde));
 	*pte_pointer = pte_base + PTX(virtural_address);
@@ -246,8 +236,7 @@ int page_insert(Pde *pde_base, u_int asid, struct Page *page_pointer,
                 u_long virtual_address, u_int perm) {
 	Pte *pte;
 
-	/* Step 1: Get corresponding page table entry. */
-  // 查找virtual_address对应的二级页表，不创建
+  // 查找virtual_address对应的二级页表，不存在的话不创建
 	pgdir_walk(pde_base, virtual_address, 0, &pte);
 
   // 相应的二级页表项是否有效
@@ -263,23 +252,16 @@ int page_insert(Pde *pde_base, u_int asid, struct Page *page_pointer,
 			return 0;
 		}
 	}
-
-	/* Step 2: Flush TLB with 'tlb_invalidate'. */
-  // 进行到这里，说明相应二级页表项无效，将TLB无效
+  // 不存在相应的二级页表，使tlb无效
   tlb_invalidate(asid, virtual_address);
-
-	/* Step 3: Re-get or create the page table entry. */
-	/* If failed to create, return the error. */
   // 创建相应二级页表项，使用查找创建
   if (pgdir_walk(pde_base, virtual_address, 1, &pte) != 0) {
 		return -E_NO_MEM;
 	}
 
-	/* Step 4: Insert the page to the page table entry with 'perm | PTE_C_CACHEABLE | PTE_V'
-	 * and increase its 'pp_ref'. */
-  // 建立二级页表项到物理页的联系即可。
-  // 只需修改二级页表项的内容，修改为物理页的物理地址和权限设置即可。同时递增页控制块的引用计数。
+  // 修改二级页表项的内容，修改为物理页的物理地址和权限设置即可。
   *pte = page2pa(page_pointer) | perm | PTE_C_CACHEABLE | PTE_V;
+  // 同时递增页控制块的引用计数。
 	(page_pointer->pp_ref)++;
 
 	return 0;
@@ -291,31 +273,24 @@ int page_insert(Pde *pde_base, u_int asid, struct Page *page_pointer,
   Post-Condition:
     Return a pointer to corresponding Page, and store it's page table entry to *ppte.
     If `va` doesn't mapped to any Page, return NULL.*/
-// 用于查找虚拟地址对应的页控制块及页表项。
-struct Page *page_lookup(Pde *pgdir, u_long va, Pte **ppte) {
+// 用于查找虚拟地址对应的页控制块及页表项，存储到pte_pointer中
+struct Page *page_lookup(Pde *pde_base, u_long virtual_address, Pte **pte_pointer) {
 	struct Page *page_pointer;
 	Pte *pte;
 
-	/* Step 1: Get the page table entry. */
-  // 查找对应的二级页表项，存储在pte指针上返回
-  // create为0，如果没找到不创建
-	pgdir_walk(pgdir, va, 0, &pte);
+  // 查找对应的二级页表项，存储在pte指针上返回，如果没找到不创建
+	pgdir_walk(pde_base, virtual_address, 0, &pte);
 
-	/* Hint: Check if the page table entry doesn't exist or is not valid. */
-  // 查找是否 存在 或 有效
+  // 查找是否存在 或 存在但页面不在内存中
 	if (pte == NULL || (*pte & PTE_V) == 0) {
 		return NULL;
 	}
 
-	/* Step 2: Get the corresponding Page struct. */
-	/* Hint: Use function `pa2page`, defined in include/pmap.h . */
   // 如果二级页表存在，获取相应的页控制块
-  // 页表项中低12位储存别的信息，只有高位是地址
-  // 而在 pa2page 中我们通过 PPN 获取物理地址对应的第几页
-  // 这样我们就将页表项中低位的用于表示权限等信息的内容消去，而只剩下页数了。
 	page_pointer = pa2page(*pte);
-	if (ppte) {
-		*ppte = pte;
+  //如果调用方需要这一页表项的地址（传入了用于传递页表项地址的空间的地址）则将页表项地址传递
+	if (pte_pointer) {
+		*pte_pointer = pte;
 	}
 
 	return page_pointer;

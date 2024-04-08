@@ -43,6 +43,7 @@ static inline u_long page2pa(struct Page *page_pointer) {
 
 // 通过物理地址获取对应的页控制块
 static inline struct Page *pa2page(u_long pa) {
+  // 物理地址对应的页表号
 	if (PPN(pa) >= npage) {
 		panic("pa2page called with invalid pa: %x", pa);
 	}
