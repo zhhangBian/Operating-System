@@ -54,6 +54,8 @@
  *             +-----------------------------------------------------------------+
  */
 
+// 每个权限对应的位不一样，因此可以使用 | 操作来表示不同的权限
+
 // Global bit. When the G bit in a TLB entry is set, that TLB entry will match solely on the VPN
 // field, regardless of whether the TLB entry’s ASID field matches the value in EntryHi.
 // 全局位，若某页表项的全局位为1，则TLB仅通过虚页号匹配表项，而不匹配ASID，将用于映射pages和envs到用户空间。
@@ -165,14 +167,14 @@
 
 extern u_long npage;
 
-// 一二级页表项的结构均为  20物理地址 + 12权限位
+// 一级页表和二级页表长度均为32位，可以用 u_long 类型来表示，结构均为  20物理地址 + 12权限位
 // 一级页表项类型  page dictionary  页目录  31-22位
 typedef u_long Pde;
 // 二级页表项类型  page table  页表  21-12位
 typedef u_long Pte;
 
-// 将 kseg0 中的虚拟地址转化为物理地址
 // a - ULIM 等价于最高三位抹零
+// 将 kseg0 中的虚拟地址转化为物理地址
 #define PADDR(kseg0_virtual_address)\
 	({\
 		u_long _a = (u_long)(kseg0_virtual_address);\
@@ -183,13 +185,13 @@ typedef u_long Pte;
 
 // translates from physical address to kernel virtual address
 // 将物理地址转化为在kseg0中的虚拟地址
-#define KADDR(pa)\
+#define KADDR(kseg0_physical_address)\
 	({\
-		u_long _ppn = PPN(pa);\
+		u_long _ppn = PPN(kseg0_physical_address);\
 		if (_ppn >= npage) {\
-			panic("KADDR called with invalid pa %08lx", (u_long)pa);\
+			panic("KADDR called with invalid pa %08lx", (u_long)kseg0_physical_address);\
 		}\
-		(pa) + ULIM;\
+		(kseg0_physical_address) + ULIM;\
 	})
 
 #define assert(x)\
