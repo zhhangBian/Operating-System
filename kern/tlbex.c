@@ -47,31 +47,29 @@ static void passive_alloc(u_int va, Pde *pgdir, u_int asid) {
 /* Overview:
  *  Refill TLB.
  */
-void _do_tlb_refill(u_long *pentrylo, u_int va, u_int asid) {
-	tlb_invalidate(asid, va);
-	Pte *ppte;
+void _do_tlb_refill(u_long *pentrylo, u_int virtual_address, u_int asid) {
+	tlb_invalidate(asid, virtual_address);
+	Pte *pte_pointer;
 	/* Hints:
-	 *  Invoke 'page_lookup' repeatedly in a loop to find the page table entry '*ppte'
+	 *  Invoke 'page_lookup' repeatedly in a loop to find the page table entry '*pte_pointer'
 	 * associated with the virtual address 'va' in the current address space 'cur_pgdir'.
 	 *
-	 *  **While** 'page_lookup' returns 'NULL', indicating that the '*ppte' could not be found,
+	 *  **While** 'page_lookup' returns 'NULL', indicating that the '*pte_pointer' could not be found,
 	 *  allocate a new page using 'passive_alloc' until 'page_lookup' succeeds.
    * 
-   * 尝试在循环中调用'page_lookup'以查找虚拟地址va在当前进程页表中对应的页表项'*ppte'
-   * 
-   * 如果'page_lookup'返回'NULL'，表明'*ppte'找不到，使用'passive_alloc'为va 所在的虚拟页面分配物理页面，
-   * 直至'page_lookup'返回不为'NULL'则退出循环。
+   * 尝试在循环中调用'page_lookup'以查找虚拟地址va在当前进程页表中对应的页表项'*pte_pointer'
+   * 如果'page_lookup'返回'NULL'，表明找不到对应页表，使用'passive_alloc'为va 所在的虚拟页面分配物理页面，
    * 你可以在调用函数时，使用全局变量cur_pgdir 作为其中一个实参。
 	 */
 
-	/* Exercise 2.9: Your code here. */
-  while (page_lookup(cur_pgdir, va, &ppte) == NULL) {
-		passive_alloc(va, cur_pgdir, asid);
+	// cur_pgdir 存储了当前进程一级页表基地址位于kseg0 的虚拟地址
+  while (page_lookup(cur_pgdir, virtual_address, &pte_pointer) == NULL) {
+		passive_alloc(virtual_address, cur_pgdir, asid);
 	}
 
-	ppte = (Pte *)((u_long)ppte & ~0x7);
-	pentrylo[0] = ppte[0] >> 6;
-	pentrylo[1] = ppte[1] >> 6;
+	pte_pointer = (Pte *)((u_long)pte_pointer & ~0x7);
+	pentrylo[0] = pte_pointer[0] >> 6;
+	pentrylo[1] = pte_pointer[1] >> 6;
 }
 
 #if !defined(LAB) || LAB >= 4

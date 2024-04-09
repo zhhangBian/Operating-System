@@ -251,7 +251,7 @@ int page_insert(Pde *pde_base, u_int asid, struct Page *page_pointer,
     }
   }
 
-  // 不存在相应的二级页表，新建映射，使tlb无效
+  // 不存在相应的二级页表，自然没有tlb映射，这一步是不必要的
   tlb_invalidate(asid, virtual_address);
   // 创建相应二级页表项
   if (pgdir_walk(pde_base, virtual_address, 1, &pte) != 0) {
