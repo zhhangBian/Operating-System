@@ -176,36 +176,36 @@ typedef u_long Pte;
 // a - ULIM 等价于最高三位抹零
 // 将 kseg0 中的虚拟地址转化为物理地址
 #define PADDR(kseg0_virtual_address)\
-	({\
-		u_long _a = (u_long)(kseg0_virtual_address);\
-		if (_a < ULIM)\
-			panic("PADDR called with invalid kva %08lx", _a);\
-		_a - ULIM;\
-	})
+  ({\
+    u_long _a = (u_long)(kseg0_virtual_address);\
+    if (_a < ULIM)\
+      panic("PADDR called with invalid kva %08lx", _a);\
+    _a - ULIM;\
+  })
 
 // translates from physical address to kernel virtual address
 // 将物理地址转化为在kseg0中的虚拟地址
 #define KADDR(kseg0_physical_address)\
-	({\
-		u_long _ppn = PPN(kseg0_physical_address);\
-		if (_ppn >= npage) {\
-			panic("KADDR called with invalid pa %08lx", (u_long)kseg0_physical_address);\
-		}\
-		(kseg0_physical_address) + ULIM;\
-	})
+  ({\
+    u_long _ppn = PPN(kseg0_physical_address);\
+    if (_ppn >= npage) {\
+      panic("KADDR called with invalid pa %08lx", (u_long)kseg0_physical_address);\
+    }\
+    (kseg0_physical_address) + ULIM;\
+  })
 
 #define assert(x)\
-	do {\
-		if (!(x)) {\
-			panic("assertion failed: %s", #x);\
-		}\
-	} while (0)
+  do {\
+    if (!(x)) {\
+      panic("assertion failed: %s", #x);\
+    }\
+  } while (0)
 
 #define TRUP(_p) \
-	({\
-		typeof((_p)) __m_p = (_p);\
-		(u_int) __m_p > ULIM ? (typeof(_p))ULIM : __m_p;\
-	})
+  ({\
+    typeof((_p)) __m_p = (_p);\
+    (u_int) __m_p > ULIM ? (typeof(_p))ULIM : __m_p;\
+  })
 
 extern void tlb_out(u_int entryhi);
 void tlb_invalidate(u_int asid, u_long va);

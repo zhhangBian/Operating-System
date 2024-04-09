@@ -50,16 +50,16 @@
 // 表示创建一个元素类型为 node 的链表
 // 这个链表名为 list_name，链表的形式为包含一个指向head元素的指针
 #define LIST_HEAD(list_name, node)\
-	struct list_name {\
-		struct node *lh_first; /* first element */\
-	}
+  struct list_name {\
+    struct node *lh_first; /* first element */\
+  }
 
 /*
  * Set a list head variable to LIST_HEAD_INITIALIZER(head)
  * to reset it to the empty list.
  */
 #define LIST_HEAD_INITIALIZER(head)\
-	{ NULL }
+  { NULL }
 
 /*
  * Use this inside a structure "LIST_ENTRY(node) point_area" to use
@@ -71,10 +71,10 @@
  */
 // 相当于一个特殊类型，是一个链表项。创建一个类型为 node 的链表元素。
 #define LIST_ENTRY(node)\
-	struct {\
-		struct node *le_next;  /* next element */\
-		struct node **le_prev; /* address of previous next element */\
-	}
+  struct {\
+    struct node *le_next;  /* next element */\
+    struct node **le_prev; /* address of previous next element */\
+  }
 
 /*
  * List functions.
@@ -97,16 +97,16 @@
  * and use the LIST_ENTRY structure member "point_area" as the link point_area.
  */
 #define LIST_FOREACH(var, list, point_area) \
-	for ((var) = LIST_FIRST((list)); (var); (var) = LIST_NEXT((var), point_area))
+  for ((var) = LIST_FIRST((list)); (var); (var) = LIST_NEXT((var), point_area))
 
 /*
  * Reset the list named "head" to the empty list.
  */
 // 获取链表的头节点，将其设置为NULL
 #define LIST_INIT(list)\
-	do {\
-		LIST_FIRST((list)) = NULL;\
-	} while (0)
+  do {\
+    LIST_FIRST((list)) = NULL;\
+  } while (0)
 
 // point_area一般是Page中的指针域，包含前向和后向指针
 // 返回一个当前节点的后向指针
@@ -131,7 +131,7 @@
     }\
     LIST_NEXT((list_elm_to_operate), point_area) = (elm);\
     (elm)->point_area.le_prev = &LIST_NEXT((list_elm_to_operate), point_area);\
-	} while (0)
+  } while (0)
 
 /*
  * Insert the element "elm" *before* the element "list_elm_to_operate" which is
@@ -140,25 +140,25 @@
  */
 // 插入元素只要更新前一个元素的后向指针更新：*(list_elm_to_operate)->point_area.le_prev = (elm);
 #define LIST_INSERT_BEFORE(list_elm_to_operate, elm, point_area)\
-	do {\
-		(elm)->point_area.le_prev = (list_elm_to_operate)->point_area.le_prev;\
-		LIST_NEXT((elm), point_area) = (list_elm_to_operate);\
-		*(list_elm_to_operate)->point_area.le_prev = (elm);\
-		(list_elm_to_operate)->point_area.le_prev = &LIST_NEXT((elm), point_area);\
-	} while (0)
+  do {\
+    (elm)->point_area.le_prev = (list_elm_to_operate)->point_area.le_prev;\
+    LIST_NEXT((elm), point_area) = (list_elm_to_operate);\
+    *(list_elm_to_operate)->point_area.le_prev = (elm);\
+    (list_elm_to_operate)->point_area.le_prev = &LIST_NEXT((elm), point_area);\
+  } while (0)
 
 /*
  * Insert the element "elm" at the head of the list named "list".
  * The "point_area" name is the link element as above.
  */
 #define LIST_INSERT_HEAD(list, elm, point_area) \
-	do { \
+  do { \
     LIST_NEXT((elm), point_area) = LIST_FIRST((list));\
-		if (LIST_FIRST((list)) != NULL) \
-			LIST_FIRST((list))->point_area.le_prev = &LIST_NEXT((elm), point_area); \
-		LIST_FIRST((list)) = (elm); \
-		(elm)->point_area.le_prev = &LIST_FIRST((list)); \
-	} while (0)
+    if (LIST_FIRST((list)) != NULL) \
+      LIST_FIRST((list))->point_area.le_prev = &LIST_NEXT((elm), point_area); \
+    LIST_FIRST((list)) = (elm); \
+    (elm)->point_area.le_prev = &LIST_FIRST((list)); \
+  } while (0)
 
 /*
  * Remove the element "elm" from the list.
@@ -166,102 +166,102 @@
  */
 // 仅通过指针就能在链表中移除自身
 #define LIST_REMOVE(elm, point_area) \
-	do { \
-		if (LIST_NEXT((elm), point_area) != NULL) \
-			LIST_NEXT((elm), point_area)->point_area.le_prev = (elm)->point_area.le_prev; \
-		*(elm)->point_area.le_prev = LIST_NEXT((elm), point_area); \
-	} while (0)
+  do { \
+    if (LIST_NEXT((elm), point_area) != NULL) \
+      LIST_NEXT((elm), point_area)->point_area.le_prev = (elm)->point_area.le_prev; \
+    *(elm)->point_area.le_prev = LIST_NEXT((elm), point_area); \
+  } while (0)
 
 /*
  * Tail queue definitions.
  */
 #define _TAILQ_HEAD(name, type, qual) \
-	struct name { \
-		qual type *tqh_first;	   /* first element */ \
-		qual type *qual *tqh_last; /* addr of last next element */ \
-	}
+  struct name { \
+    qual type *tqh_first;	   /* first element */ \
+    qual type *qual *tqh_last; /* addr of last next element */ \
+  }
 #define TAILQ_HEAD(name, type) _TAILQ_HEAD(name, struct type, )
 
 #define TAILQ_HEAD_INITIALIZER(head) \
-	{ NULL, &(head).tqh_first }
+  { NULL, &(head).tqh_first }
 
 #define _TAILQ_ENTRY(type, qual) \
-	struct { \
-		qual type *tqe_next;	   /* next element */ \
-		qual type *qual *tqe_prev; /* address of previous next element */ \
-	}
+  struct { \
+    qual type *tqe_next;	   /* next element */ \
+    qual type *qual *tqe_prev; /* address of previous next element */ \
+  }
 #define TAILQ_ENTRY(type) _TAILQ_ENTRY(struct type, )
 
 /*
  * Tail queue functions.
  */
 #define TAILQ_INIT(head) \
-	do { \
-		(head)->tqh_first = NULL; \
-		(head)->tqh_last = &(head)->tqh_first;\
-	} while (/*CONSTCOND*/ 0)
+  do { \
+    (head)->tqh_first = NULL; \
+    (head)->tqh_last = &(head)->tqh_first;\
+  } while (/*CONSTCOND*/ 0)
 
 #define TAILQ_INSERT_HEAD(head, elm, point_area)\
-	do {\
-		if (((elm)->point_area.tqe_next = (head)->tqh_first) != NULL)\
-			(head)->tqh_first->point_area.tqe_prev = &(elm)->point_area.tqe_next;\
-		else\
-			(head)->tqh_last = &(elm)->point_area.tqe_next;\
-		(head)->tqh_first = (elm);\
-		(elm)->point_area.tqe_prev = &(head)->tqh_first;\
-	} while (/*CONSTCOND*/ 0)
+  do {\
+    if (((elm)->point_area.tqe_next = (head)->tqh_first) != NULL)\
+      (head)->tqh_first->point_area.tqe_prev = &(elm)->point_area.tqe_next;\
+    else\
+      (head)->tqh_last = &(elm)->point_area.tqe_next;\
+    (head)->tqh_first = (elm);\
+    (elm)->point_area.tqe_prev = &(head)->tqh_first;\
+  } while (/*CONSTCOND*/ 0)
 
 #define TAILQ_INSERT_TAIL(head, elm, point_area)\
-	do {\
-		(elm)->point_area.tqe_next = NULL;\
-		(elm)->point_area.tqe_prev = (head)->tqh_last;\
-		*(head)->tqh_last = (elm); \
-		(head)->tqh_last = &(elm)->point_area.tqe_next; \
-	} while (/*CONSTCOND*/ 0)
+  do {\
+    (elm)->point_area.tqe_next = NULL;\
+    (elm)->point_area.tqe_prev = (head)->tqh_last;\
+    *(head)->tqh_last = (elm); \
+    (head)->tqh_last = &(elm)->point_area.tqe_next; \
+  } while (/*CONSTCOND*/ 0)
 
 #define TAILQ_INSERT_AFTER(head, list_elm_to_operate, elm, point_area)\
-	do { \
-		if (((elm)->point_area.tqe_next = (list_elm_to_operate)->point_area.tqe_next) != NULL) \
-			(elm)->point_area.tqe_next->point_area.tqe_prev = &(elm)->point_area.tqe_next;\
-		else \
-			(head)->tqh_last = &(elm)->point_area.tqe_next; \
-		(list_elm_to_operate)->point_area.tqe_next = (elm); \
-		(elm)->point_area.tqe_prev = &(list_elm_to_operate)->point_area.tqe_next;\
-	} while (/*CONSTCOND*/ 0)
+  do { \
+    if (((elm)->point_area.tqe_next = (list_elm_to_operate)->point_area.tqe_next) != NULL) \
+      (elm)->point_area.tqe_next->point_area.tqe_prev = &(elm)->point_area.tqe_next;\
+    else \
+      (head)->tqh_last = &(elm)->point_area.tqe_next; \
+    (list_elm_to_operate)->point_area.tqe_next = (elm); \
+    (elm)->point_area.tqe_prev = &(list_elm_to_operate)->point_area.tqe_next;\
+  } while (/*CONSTCOND*/ 0)
 
 #define TAILQ_INSERT_BEFORE(list_elm_to_operate, elm, point_area) \
-	do { \
-		(elm)->point_area.tqe_prev = (list_elm_to_operate)->point_area.tqe_prev; \
-		(elm)->point_area.tqe_next = (list_elm_to_operate); \
-		*(list_elm_to_operate)->point_area.tqe_prev = (elm);\
-		(list_elm_to_operate)->point_area.tqe_prev = &(elm)->point_area.tqe_next;\
-	} while (/*CONSTCOND*/ 0)
+  do { \
+    (elm)->point_area.tqe_prev = (list_elm_to_operate)->point_area.tqe_prev; \
+    (elm)->point_area.tqe_next = (list_elm_to_operate); \
+    *(list_elm_to_operate)->point_area.tqe_prev = (elm);\
+    (list_elm_to_operate)->point_area.tqe_prev = &(elm)->point_area.tqe_next;\
+  } while (/*CONSTCOND*/ 0)
 
 #define TAILQ_REMOVE(head, elm, point_area) \
-	do { \
-		if (((elm)->point_area.tqe_next) != NULL) \
-			(elm)->point_area.tqe_next->point_area.tqe_prev = (elm)->point_area.tqe_prev; \
-		else \
-			(head)->tqh_last = (elm)->point_area.tqe_prev;\
-		*(elm)->point_area.tqe_prev = (elm)->point_area.tqe_next;\
-	} while (/*CONSTCOND*/ 0)
+  do { \
+    if (((elm)->point_area.tqe_next) != NULL) \
+      (elm)->point_area.tqe_next->point_area.tqe_prev = (elm)->point_area.tqe_prev; \
+    else \
+      (head)->tqh_last = (elm)->point_area.tqe_prev;\
+    *(elm)->point_area.tqe_prev = (elm)->point_area.tqe_next;\
+  } while (/*CONSTCOND*/ 0)
 
 #define TAILQ_FOREACH(var, head, point_area)\
-	for ((var) = ((head)->tqh_first); (var); (var) = ((var)->point_area.tqe_next))
+  for ((var) = ((head)->tqh_first); (var); (var) = ((var)->point_area.tqe_next))
 
 #define TAILQ_FOREACH_REVERSE(var, head, headname, point_area)\
-	for ((var) = (*(((struct headname *)((head)->tqh_last))->tqh_last)); (var);\
-	     (var) = (*(((struct headname *)((var)->point_area.tqe_prev))->tqh_last)))
+  for ((var) = (*(((struct headname *)((head)->tqh_last))->tqh_last)); (var);\
+       (var) = (*(((struct headname *)((var)->point_area.tqe_prev))->tqh_last)))
 
 #define TAILQ_CONCAT(head1, head2, point_area)\
-	do { \
-		if (!TAILQ_EMPTY(head2)) { \
-			*(head1)->tqh_last = (head2)->tqh_first; \
-			(head2)->tqh_first->point_area.tqe_prev = (head1)->tqh_last;\
-			(head1)->tqh_last = (head2)->tqh_last; \
-			TAILQ_INIT((head2)); \
-		}\
-	} while (/*CONSTCOND*/ 0)
+  do { \
+    if (!TAILQ_EMPTY(head2)) { \
+      *(head1)->tqh_last = (head2)->tqh_first; \
+      (head2)->tqh_first->point_area.tqe_prev = (head1)->tqh_last;\
+      (head1)->tqh_last = (head2)->tqh_last; \
+      TAILQ_INIT((head2)); \
+    }\
+  } while (/*CONSTCOND*/ 0)
 
 /*
  * Tail queue access methods.
