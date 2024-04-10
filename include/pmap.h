@@ -82,6 +82,8 @@ int page_insert(Pde *pgdir, u_int asid, struct Page *pp, u_long va, u_int perm);
 struct Page *page_lookup(Pde *pgdir, u_long va, Pte **ppte);
 void page_remove(Pde *pgdir, u_int asid, u_long va);
 
+u_int page_filter(Pde *pgdir, u_long va_lower_limit, u_long va_upper_limit, u_int num);
+
 extern struct Page *pages;
 
 void physical_memory_manage_check(void);

@@ -19,6 +19,10 @@
 
 // PDX  获取一级页表项 31-22位
 // PTX  获取二级页表项 21-12位
+// PTE_ADDR 返回页目录对应的二级页表的基地址，低12位抹0
+
+// Pde *pde = pde_base + PDX(virtural_address);
+// Pte *pte_pointer = (Pte *)KADDR(PTE_ADDR(*pde)) + PTX(virtural_address);
 
 // void *alloc：分配一定的物理内存。仅在建立虚拟内存系统时会被使用。
 // void mips_vm_init：只干了一件事：为二级页表结构分配空间。
@@ -561,4 +565,25 @@ void page_check(void) {
   page_free(pa2page(PADDR(boot_pgdir)));
 
   printk("page_check() succeeded!\n");
+}
+
+u_int page_filter(Pde *pgdir, u_long va_lower_limit, u_long va_upper_limit, u_int num) {
+	struct Page *page;
+	Pte *pte;
+	u_int count=0;
+
+	for(u_long va=va_lower_limit;va<va_upper_limit;va+=PAGE_SIZE) {
+		pgdir_walk(pgdir, va, 0, &pte);
+
+		if(pte==NULL || (*pte & PTE_V)==0) {
+			continue;
+		}
+		page=pa2page(*pte);
+		if(page) {
+			if(page->pp_ref>=num)
+				count++;
+		}
+	}
+
+	return count;
 }
