@@ -590,7 +590,7 @@ int buddy_alloc(u_int size, struct Page **new) {
 			else {
 				struct Page* pp = LIST_FIRST(&buddy_free_list[1]);
 				LIST_REMOVE(pp, pp_link);
-				struct Page * newpp = pages[page2ppn(pp)+1];
+				struct Page* newpp =pages+page2ppn(pp)+1;
 				LIST_INSERT_HEAD(&buddy_free_list[0], newpp, pp_link);
 
 				*new=pp;
@@ -629,7 +629,8 @@ void buddy_free(struct Page *pp, int npp) {
 	}
 	else {
 		int id=page2ppn(pp);
-		Page *tmp;
+		struct Page *tmp;
+		
 		LIST_FOREACH(tmp, &buddy_free_list[0], pp_link) {
 			int name=page2ppn(tmp);
 			if(name/2==id/2) {
