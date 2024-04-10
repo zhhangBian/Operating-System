@@ -112,7 +112,7 @@
 
 // point_area一般是Page中的指针域，包含前向和后向指针
 // 返回一个当前节点的后向指针
-#define LIST_NEXT(elm, point_area) ((elm)->point_area.le_next)
+#define LIST_NEXT(elm, point_area) ((elm)->(point_area).le_next)
 
 /*
  * Insert the element 'elm' *after* 'list_elm_to_operate' which is already in the list. The 'point_area'
@@ -127,9 +127,9 @@
 // 由于是双向链表，要判断是否有下一个元素
 #define LIST_INSERT_AFTER(list_elm_to_operate, elm, point_area) \
   do {\
-    LIST_NEXT((elm), point_area) = LIST_NEXT((list_elm_to_operate), point_area);\
-    if((LIST_NEXT((elm), point_area)) != NULL) {\
-      LIST_NEXT((list_elm_to_operate), point_area)->point_area.le_prev = &LIST_NEXT((elm), point_area);\
+    LIST_NEXT((elm), (point_area)) = LIST_NEXT((list_elm_to_operate), (point_area));\
+    if((LIST_NEXT((elm), (point_area))) != NULL) {\
+      LIST_NEXT((list_elm_to_operate), (point_area))->(point_area).le_prev = &LIST_NEXT((elm), point_area);\
     }\
     LIST_NEXT((list_elm_to_operate), point_area) = (elm);\
     (elm)->point_area.le_prev = &LIST_NEXT((list_elm_to_operate), point_area);\
