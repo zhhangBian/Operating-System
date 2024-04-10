@@ -96,6 +96,8 @@
  * During the loop, assign the list elements to the variable "var"
  * and use the LIST_ENTRY structure member "point_area" as the link point_area.
  */
+// 遍历链表
+//  LIST_FOREACH(tmp, &page_free_list, pp_link) {}
 #define LIST_FOREACH(var, list, point_area) \
   for ((var) = LIST_FIRST((list)); (var); (var) = LIST_NEXT((var), point_area))
 

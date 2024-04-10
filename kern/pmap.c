@@ -5,6 +5,21 @@
 #include <pmap.h>
 #include <printk.h>
 
+// 相关转换函数：
+// PPN  获取物理地址对应的页表号
+// VPN  获取虚拟地址对应的页表号
+
+// page2ppn  获取对应的控制块是第几个页
+// page2pa(&page)  获取页控制块控制页面对应的物理地址
+// pa2page(pa)  通过物理地址获取对应的页控制块
+// page2kva  获取页控制块控制页面对应的在kseg0中的虚拟地址
+
+// PADDR(va)  将 kseg0 中的虚拟地址转化为物理地址
+// KADDR(pa)  将物理地址转化为在kseg0中的虚拟地址
+
+// PDX  获取一级页表项 31-22位
+// PTX  获取二级页表项 21-12位
+
 /* These variables are set by mips_detect_memory(ram_low_size); */
 static u_long memsize; /* Maximum physical address */
 u_long npage;	       /* Amount of memory(in pages) */
