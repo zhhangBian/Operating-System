@@ -20,6 +20,18 @@
 // PDX  获取一级页表项 31-22位
 // PTX  获取二级页表项 21-12位
 
+// void *alloc：分配一定的物理内存。仅在建立虚拟内存系统时会被使用。
+// void mips_vm_init：只干了一件事：为二级页表结构分配空间。
+// void page_init：初始化页表管理结构，将空闲页表都插入到 page_free_list 中。
+// int page_alloc：从空闲页表中取出一页并分配。
+// int page_free：释放一页，
+// int pgdir_walk：通过给出的页目录基地址，找到虚拟地址 va 对应的页表项并将其地址赋给 ppte。若不存在页表项且 create 为 1 则为其分配一个页表。
+// int page_insert：将虚拟地址 va 映射到 pp 对应的物理页面。
+// struct Page *page_lookup：寻找虚拟地址 va 映射到的页面。将二级页表项地址赋值给 ppte。返回对应的页控制块。
+// void page_decref：减少页面的引用。若减少后引用数为 0，则释放这一页。
+// void page_remove：取消 va 映射的页面。
+// void tlb_invalidate：使 TLB 中带有 asid 的 va 地址的表项无效。
+
 /* These variables are set by mips_detect_memory(ram_low_size); */
 static u_long memsize; /* Maximum physical address */
 u_long npage;	       /* Amount of memory(in pages) */
