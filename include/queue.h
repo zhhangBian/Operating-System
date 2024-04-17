@@ -155,7 +155,7 @@
  */
 #define LIST_INSERT_HEAD(list, elm, point_area) \
   do { \
-    LIST_NEXT((elm), point_area) = LIST_FIRST((list));\
+    LIST_NEXT((elm), point_area) = LIST_FIRST((list)); \
     if (LIST_FIRST((list)) != NULL) \
       LIST_FIRST((list))->point_area.le_prev = &LIST_NEXT((elm), point_area); \
     LIST_FIRST((list)) = (elm); \
@@ -177,8 +177,8 @@
 /*
  * Tail queue definitions.
  */
-#define _TAILQ_HEAD(name, type, qual) \
-  struct name { \
+#define _TAILQ_HEAD(tail_name, type, qual) \
+  struct tail_name { \
     qual type *tqh_first;	   /* first element */ \
     qual type *qual *tqh_last; /* addr of last next element */ \
   }
@@ -197,10 +197,10 @@
 /*
  * Tail queue functions.
  */
-#define TAILQ_INIT(head) \
+#define TAILQ_INIT(tail) \
   do { \
-    (head)->tqh_first = NULL; \
-    (head)->tqh_last = &(head)->tqh_first;\
+    (tail)->tqh_first = NULL; \
+    (tail)->tqh_last = &(tail)->tqh_first;\
   } while (/*CONSTCOND*/ 0)
 
 #define TAILQ_INSERT_HEAD(head, elm, point_area)\

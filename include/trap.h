@@ -7,6 +7,7 @@
 
 struct Trapframe {
 	/* Saved main processor registers. */
+  // 保存32个通用寄存器的信息
 	unsigned long regs[32];
 
 	/* Saved special registers. */

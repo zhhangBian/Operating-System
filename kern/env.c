@@ -9,11 +9,13 @@
 struct Env envs[NENV] __attribute__((aligned(PAGE_SIZE))); // All environments
 
 struct Env *curenv = NULL;	      // the current env
-static struct Env_list env_free_list; // Free list
+// 处于空闲状态的进程队列
+static struct Env_list env_free_list;
 
 // Invariant: 'env' in 'env_sched_list' iff. 'env->env_status' is 'RUNNABLE'.
-struct Env_sched_list env_sched_list; // Runnable list
-
+// 处于执行或就绪的进程队列   'env->env_status' == 'RUNNABLE'
+struct Env_sched_list env_sched_list;
+// 模板页目录
 static Pde *base_pgdir;
 
 static uint32_t asid_bitmap[NASID / 32] = {0};
@@ -60,7 +62,11 @@ static void asid_free(u_int i) {
  * Pre-Condition:
  *   'pa', 'va' and 'size' are aligned to 'PAGE_SIZE'.
  */
-static void map_segment(Pde *pgdir, u_int asid, u_long pa, u_long va, u_int size, u_int perm) {
+// 广义的 page_insert。
+// 它的功能是，在页目录 pgdir 中，将虚拟地址空间 [va, va+size) 映射到到物理地址空间 [pa, pa+size)，并赋予 perm 权限。
+static void map_segment(Pde *pde_base, u_int asid, 
+                        u_long physical_address, u_long virtual_address, 
+                        u_int size, u_int permission) {
 
 	assert(pa % PAGE_SIZE == 0);
 	assert(va % PAGE_SIZE == 0);
@@ -74,7 +80,7 @@ static void map_segment(Pde *pgdir, u_int asid, u_long pa, u_long va, u_int size
 		 *  Use 'pa2page' to get the 'struct Page *' of the physical address.
 		 */
 		/* Exercise 3.2: Your code here. */
-
+    page_insert(pde_base, asid, pa2page(physical_address + i), virtual_address + i, permission);
 	}
 }
 
@@ -144,12 +150,18 @@ void env_init(void) {
 	/* Step 1: Initialize 'env_free_list' with 'LIST_INIT' and 'env_sched_list' with
 	 * 'TAILQ_INIT'. */
 	/* Exercise 3.1: Your code here. (1/2) */
+  LIST_INIT(&env_free_list);
+  TAILQ_INIT(&env_sched_list);
 
 	/* Step 2: Traverse the elements of 'envs' array, set their status to 'ENV_FREE' and insert
 	 * them into the 'env_free_list'. Make sure, after the insertion, the order of envs in the
 	 * list should be the same as they are in the 'envs' array. */
 
 	/* Exercise 3.1: Your code here. (2/2) */
+  for (i = NENV - 1; i >= 0; i--) {
+    envs[i].env_status = ENV_FREE;
+		LIST_INSERT_HEAD(&env_free_list, envs + i, env_link);
+	}
 
 	/*
 	 * We want to map 'UPAGES' and 'UENVS' to *every* user space with PTE_G permission (without
@@ -164,10 +176,8 @@ void env_init(void) {
 	p->pp_ref++;
 
 	base_pgdir = (Pde *)page2kva(p);
-	map_segment(base_pgdir, 0, PADDR(pages), UPAGES,
-		    ROUND(npage * sizeof(struct Page), PAGE_SIZE), PTE_G);
-	map_segment(base_pgdir, 0, PADDR(envs), UENVS, ROUND(NENV * sizeof(struct Env), PAGE_SIZE),
-		    PTE_G);
+	map_segment(base_pgdir, 0, PADDR(pages), UPAGES, ROUND(npage * sizeof(struct Page), PAGE_SIZE), PTE_G);
+	map_segment(base_pgdir, 0, PADDR(envs), UENVS, ROUND(NENV * sizeof(struct Env), PAGE_SIZE), PTE_G);
 }
 
 /* Overview:
@@ -181,15 +191,19 @@ static int env_setup_vm(struct Env *e) {
 	 * Hint:
 	 *   You can get the kernel address of a specified physical page using 'page2kva'.
 	 */
+  // 为进程创建页表
 	struct Page *p;
 	try(page_alloc(&p));
 	/* Exercise 3.3: Your code here. */
+  p->pp_ref++;
+  e->env_pgdir=(Pde*)page2kva(p);
 
 	/* Step 2: Copy the template page directory 'base_pgdir' to 'e->env_pgdir'. */
 	/* Hint:
 	 *   As a result, the address space of all envs is identical in [UTOP, UVPT).
 	 *   See include/mmu.h for layout.
 	 */
+  // 将模板页目录中的内容复制到该新页中
 	memcpy(e->env_pgdir + PDX(UTOP), base_pgdir + PDX(UTOP),
 	       sizeof(Pde) * (PDX(UVPT) - PDX(UTOP)));
 
@@ -224,9 +238,16 @@ int env_alloc(struct Env **new, u_int parent_id) {
 
 	/* Step 1: Get a free Env from 'env_free_list' */
 	/* Exercise 3.4: Your code here. (1/4) */
+  if (LIST_EMPTY(&env_free_list)) {
+		return -E_NO_FREE_ENV;
+	}
+	e = LIST_FIRST(&env_free_list);
 
 	/* Step 2: Call a 'env_setup_vm' to initialize the user address space for this new Env. */
 	/* Exercise 3.4: Your code here. (2/4) */
+  if ((r = env_setup_vm(e)) != 0) {
+		return r;
+	}
 
 	/* Step 3: Initialize these fields for the new Env with appropriate values:
 	 *   'env_user_tlb_mod_entry' (lab4), 'env_runs' (lab6), 'env_id' (lab3), 'env_asid' (lab3),
@@ -239,6 +260,11 @@ int env_alloc(struct Env **new, u_int parent_id) {
 	e->env_user_tlb_mod_entry = 0; // for lab4
 	e->env_runs = 0;	       // for lab6
 	/* Exercise 3.4: Your code here. (3/4) */
+  e->env_id = mkenvid(e);
+	e->env_parent_id = parent_id;
+	if ((r = asid_alloc(&e->env_asid)) != 0) {
+		return r;
+	}
 
 	/* Step 4: Initialize the sp and 'cp0_status' in 'e->env_tf'.
 	 *   Set the EXL bit to ensure that the processor remains in kernel mode during context
@@ -251,6 +277,7 @@ int env_alloc(struct Env **new, u_int parent_id) {
 
 	/* Step 5: Remove the new Env from env_free_list. */
 	/* Exercise 3.4: Your code here. (4/4) */
+  LIST_REMOVE(e, env_link);
 
 	*new = e;
 	return 0;
