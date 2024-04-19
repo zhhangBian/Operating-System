@@ -4,7 +4,7 @@
 /*
  * Part 1.  Page table/directory defines.
  */
-
+// 支持的ASID总数
 #define NASID 256
 // PAGE_SIZE 为 页 对应的字节大小
 #define PAGE_SIZE 4096
@@ -145,7 +145,9 @@
 #define ULIM 0x80000000
 
 #define UVPT (ULIM - PDMAP)
+// 用户空间的Pages数组对应的虚拟地址起始处
 #define UPAGES (UVPT - PDMAP)
+// 用户空间的Envs数组对应的虚拟地址起始处
 #define UENVS (UPAGES - PDMAP)
 
 #define UTOP UENVS

@@ -19,24 +19,31 @@
 // Control block of an environment (process).
 // PCB 是系统感知进程存在的唯一标志。进程与PCB 是一一对应的。
 struct Env {
-  // 在发生进程调度，或当陷入内核时，会将当时的进程上下文环境保存在env_tf 变量中
+  // 保存进程的上下文环境：GRF+CP0
+  // 发生进程调度、陷入内核时保存
   struct Trapframe env_tf;
-  // 构造空闲进程链表的头节点
+  
+  // 空闲进程链表的头节点
   LIST_ENTRY(Env) env_link;
+  
   // 进程id，唯一
   u_int env_id;
   u_int env_asid;			 // ASID of this env
   // 进程的父进程的id
   u_int env_parent_id;
+  
   // 记录进程的状态
   // - ENV_FREE : 进程控制块没有被任何进程使用，处于进程空闲链表中。
   // - ENV_NOT_RUNNABLE : 处于阻塞状态
   // - ENV_RUNNABLE : 该进程处于执行状态或就绪状态，即其可能是正在运行的，也可能正在等待被调度。
   u_int env_status;
-  // 该进程页目录的内核虚拟地址
+  
+  // 该进程的页目录地址（虚拟地址）
   Pde *env_pgdir;
+  
   // 构造调度队列
   TAILQ_ENTRY(Env) env_sched_link; // intrusive entry in 'env_sched_list'
+  
   // 进程优先级
   u_int env_pri;
 

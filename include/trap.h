@@ -6,11 +6,10 @@
 #include <types.h>
 
 struct Trapframe {
-	/* Saved main processor registers. */
   // 保存32个通用寄存器的信息
 	unsigned long regs[32];
 
-	/* Saved special registers. */
+	// 保存特殊寄存器的值：cp0
 	unsigned long cp0_status;
 	unsigned long hi;
 	unsigned long lo;
