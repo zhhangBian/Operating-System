@@ -55,21 +55,46 @@ typedef uint32_t Elf32_Symndx;
 
 #define EI_NIDENT (16)
 
+// 节头表类型
 typedef struct {
-	unsigned char e_ident[EI_NIDENT]; /* Magic number and other info */
-	Elf32_Half e_type;		  /* Object file type */
-	Elf32_Half e_machine;		  /* Architecture */
-	Elf32_Word e_version;		  /* Object file version */
-	Elf32_Addr e_entry;		  /* Entry point virtual address */
-	Elf32_Off e_phoff;		  /* Program header table file offset */
-	Elf32_Off e_shoff;		  /* Section header table file offset */
-	Elf32_Word e_flags;		  /* Processor-specific flags */
-	Elf32_Half e_ehsize;		  /* ELF header size in bytes */
-	Elf32_Half e_phentsize;		  /* Program header table entry size */
-	Elf32_Half e_phnum;		  /* Program header table entry count */
-	Elf32_Half e_shentsize;		  /* Section header table entry size */
-	Elf32_Half e_shnum;		  /* Section header table entry count */
-	Elf32_Half e_shstrndx;		  /* Section header string table index */
+  // 相关的魔数以及其他信息
+  unsigned char e_ident[EI_NIDENT];
+  // 文件类型
+  Elf32_Half e_type;
+  // 机器架构
+  Elf32_Half e_machine;
+  // 文件版本
+  Elf32_Word e_version;
+  // 入口点的虚拟地址
+  // Entry point virtual address
+  Elf32_Addr e_entry;
+  // 程序头表所在处与此文件头的偏移量
+  // Program header table file offset
+  Elf32_Off e_phoff;
+  // 节头表所在处与此文件头的偏移
+  // Section header table file offset
+  Elf32_Off e_shoff;
+  // 针对处理器的标记
+  // Processor-specific flags
+  Elf32_Word e_flags;
+  // ELF 文件头的大小（单位为字节）
+  // ELF header size in bytes
+  Elf32_Half e_ehsize;
+  // 程序头表表项大小
+  // Program header table entry size
+  Elf32_Half e_phentsize;
+  // 程序头表表项数
+  // Program header table entry count
+  Elf32_Half e_phnum;
+  // 节头表表项大小
+  // Section header table entry size
+  Elf32_Half e_shentsize;
+  // 节头表表项数
+  // Section header table entry count
+  Elf32_Half e_shnum;
+  // 节头字符串编号
+  // Section header string table index
+  Elf32_Half e_shstrndx;
 } Elf32_Ehdr;
 
 /* Fields in the e_ident array.  The EI_* macros are indices into the
@@ -90,15 +115,24 @@ typedef struct {
 
 /* Program segment header.  */
 
+// 段头表类型
 typedef struct {
-	Elf32_Word p_type;   /* Segment type */
-	Elf32_Off p_offset;  /* Segment file offset */
-	Elf32_Addr p_vaddr;  /* Segment virtual address */
-	Elf32_Addr p_paddr;  /* Segment physical address */
-	Elf32_Word p_filesz; /* Segment size in file */
-	Elf32_Word p_memsz;  /* Segment size in memory */
-	Elf32_Word p_flags;  /* Segment flags */
-	Elf32_Word p_align;  /* Segment alignment */
+  // 段类型
+  Elf32_Word p_type;
+  // 段在文件中的偏移量
+  Elf32_Off p_offset;
+  // 段的虚拟地址
+  Elf32_Addr p_vaddr;
+  // 段的物理地址
+  Elf32_Addr p_paddr;
+  // 文件中段的大小
+  Elf32_Word p_filesz;
+  // 内存中段的大小
+  Elf32_Word p_memsz;
+  // 段标志
+  Elf32_Word p_flags;
+  // 段对齐
+  Elf32_Word p_align;
 } Elf32_Phdr;
 
 /* Legal values for p_type (segment type).  */
@@ -124,16 +158,16 @@ typedef struct {
 #define PF_MASKPROC 0xf0000000 /* Processor-specific */
 
 /* Utils provided by our ELF loader. */
-
+// 回调函数
 typedef int (*elf_mapper_t)(void *data, u_long va, size_t offset, u_int perm, const void *src,
-			    size_t len);
+          size_t len);
 
 const Elf32_Ehdr *elf_from(const void *binary, size_t size);
 
 int elf_load_seg(Elf32_Phdr *ph, const void *bin, elf_mapper_t map_page, void *data);
 
-#define ELF_FOREACH_PHDR_OFF(ph_off, ehdr)                                                         \
-	(ph_off) = (ehdr)->e_phoff;                                                                \
-	for (int _ph_idx = 0; _ph_idx < (ehdr)->e_phnum; ++_ph_idx, (ph_off) += (ehdr)->e_phentsize)
+#define ELF_FOREACH_PHDR_OFF(ph_off, ehdr) \
+  (ph_off) = (ehdr)->e_phoff; \
+  for (int _ph_idx = 0; _ph_idx < (ehdr)->e_phnum; ++_ph_idx, (ph_off) += (ehdr)->e_phentsize)
 
 #endif /* elf.h */

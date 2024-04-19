@@ -297,26 +297,31 @@ int env_alloc(struct Env **new, u_int parent_id) {
  *   coherence, which MOS has NOT implemented. This may result in unexpected behaviours on real
  *   CPUs! QEMU doesn't simulate caching, allowing the OS to function correctly.
  */
-static int load_icode_mapper(void *data, u_long va, size_t offset, u_int perm, const void *src,
-           size_t len) {
+// load_icode_mapper是回调函数的具体实现，用于完成单个页面的加载过程
+static int load_icode_mapper(void *data, u_long virtual_address, size_t offset, 
+                             u_int permission, const void *src, size_t len) {
   // 将 data 还原为进程控制块
   struct Env *env = (struct Env *)data;
-  struct Page *p;
-  int r;
+  struct Page *page;
+  int func_info;
 
   /* Step 1: Allocate a page with 'page_alloc'. */
   /* Exercise 3.5: Your code here. (1/2) */
+  if(func_info = page_alloc(&page) != 0) {
+    return func_info;
+  }
 
   /* Step 2: If 'src' is not NULL, copy the 'len' bytes started at 'src' into 'offset' at this
    * page. */
   // Hint: You may want to use 'memcpy'.
   if (src != NULL) {
     /* Exercise 3.5: Your code here. (2/2) */
-
+    memcpy((void *)(page2kva(page) + offset), src, len);
   }
 
   /* Step 3: Insert 'p' into 'env->env_pgdir' at 'va' with 'perm'. */
-  return page_insert(env->env_pgdir, env->env_asid, p, va, perm);
+  // 将虚拟地址映射到页
+  return page_insert(env->env_pgdir, env->env_asid, page, virtual_address, permission);
 }
 
 /* Overview:
@@ -324,8 +329,10 @@ static int load_icode_mapper(void *data, u_long va, size_t offset, u_int perm, c
  *   'binary' points to an ELF executable image of 'size' bytes, which contains both text and data
  *   segments.
  */
-static void load_icode(struct Env *e, const void *binary, size_t size) {
+// 加载可执行文件binary到进程e的内存中
+static void load_icode(struct Env *env, const void *binary, size_t size) {
   /* Step 1: Use 'elf_from' to parse an ELF header from 'binary'. */
+  // 解析地址对应的文件是否为ELF类型
   const Elf32_Ehdr *ehdr = elf_from(binary, size);
   if (!ehdr) {
     panic("bad elf at %x", binary);
@@ -335,19 +342,19 @@ static void load_icode(struct Env *e, const void *binary, size_t size) {
    * As a loader, we just care about loadable segments, so parse only program headers here.
    */
   size_t ph_off;
+  // 遍历所有程序头表
   ELF_FOREACH_PHDR_OFF (ph_off, ehdr) {
     Elf32_Phdr *ph = (Elf32_Phdr *)(binary + ph_off);
+    // 该类型说明其对应的程序需要被加载到内存中
     if (ph->p_type == PT_LOAD) {
-      // 'elf_load_seg' is defined in lib/elfloader.c
-      // 'load_icode_mapper' defines the way in which a page in this segment
-      // should be mapped.
-      panic_on(elf_load_seg(ph, binary + ph->p_offset, load_icode_mapper, e));
+      // load_icode_mapper是回调函数的具体实现，用于完成单个页面的加载过程
+      panic_on(elf_load_seg(ph, binary + ph->p_offset, load_icode_mapper, env));
     }
   }
 
-  /* Step 3: Set 'e->env_tf.cp0_epc' to 'ehdr->e_entry'. */
-  /* Exercise 3.6: Your code here. */
-
+  // 将进程控制块中trap frame的epc cp0寄存器的值设置为ELF文件中设定的程序入口地址
+  // 指示了进程恢复运行时PC应恢复到的位置
+  env->env_tf.cp0_epc = ehdr->e_entry;
 }
 
 /* Overview:
