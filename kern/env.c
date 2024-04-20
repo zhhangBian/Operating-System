@@ -227,6 +227,7 @@ static int env_setup_vm(struct Env *env) {
  *     'env_id', 'env_asid', 'env_parent_id', 'env_tf.regs[29]', 'env_tf.cp0_status',
  *     'env_user_tlb_mod_entry', 'env_runs'
  */
+// 获取一个进程控制块，并设置相应的属性
 int env_alloc(struct Env **new, u_int parent_id) {
   int func_info;
   struct Env *env;
@@ -245,20 +246,17 @@ int env_alloc(struct Env **new, u_int parent_id) {
   /* Step 3: Initialize these fields for the new Env with appropriate values:
    *   'env_user_tlb_mod_entry' (lab4), 'env_runs' (lab6), 'env_id' (lab3), 'env_asid' (lab3),
    *   'env_parent_id' (lab3)
-   *
-   * Hint:
-   *   Use 'asid_alloc' to allocate a free asid.
-   *   Use 'mkenvid' to allocate a free envid.
    */
   env->env_user_tlb_mod_entry = 0;  // for lab4
   env->env_runs = 0;	              // for lab6
   // 设置env块的唯一id
-  env->env_id = mkenvid(e);
+  env->env_id = mkenvid(env);
   env->env_parent_id = parent_id;
   if ((func_info = asid_alloc(&env->env_asid)) != 0) {
     return func_info;
   }
 
+  // 设置进程相关的属性
   /* Step 4: Initialize the sp and 'cp0_status' in 'e->env_tf'.
    *   Set the EXL bit to ensure that the processor remains in kernel mode during context
    * recovery. Additionally, set UM to 1 so that when ERET unsets EXL, the processor
@@ -307,7 +305,7 @@ static int load_icode_mapper(void *data, u_long virtual_address, size_t offset,
 
   /* Step 1: Allocate a page with 'page_alloc'. */
   /* Exercise 3.5: Your code here. (1/2) */
-  if(func_info = page_alloc(&page) != 0) {
+  if((func_info = page_alloc(&page)) != 0) {
     return func_info;
   }
 
@@ -366,18 +364,23 @@ static void load_icode(struct Env *env, const void *binary, size_t size) {
  *   'binary' is an ELF executable image in memory.
  */
 struct Env *env_create(const void *binary, size_t size, int priority) {
-  struct Env *e;
+  struct Env *env;
   /* Step 1: Use 'env_alloc' to alloc a new env, with 0 as 'parent_id'. */
   /* Exercise 3.7: Your code here. (1/3) */
+  env_alloc(&env,0);
 
   /* Step 2: Assign the 'priority' to 'e' and mark its 'env_status' as runnable. */
   /* Exercise 3.7: Your code here. (2/3) */
+  env->env_pri =  priority;
+  env->env_status = ENV_RUNNABLE;
 
   /* Step 3: Use 'load_icode' to load the image from 'binary', and insert 'e' into
    * 'env_sched_list' using 'TAILQ_INSERT_HEAD'. */
   /* Exercise 3.7: Your code here. (3/3) */
+  load_icode(env, binary, size);
+	TAILQ_INSERT_HEAD(&env_sched_list, env, env_sched_link);
 
-  return e;
+  return env;
 }
 
 /* Overview:
@@ -456,8 +459,8 @@ extern void env_pop_tf(struct Trapframe *tf, u_int asid) __attribute__((noreturn
  * Hints:
  *   You may use these functions: 'env_pop_tf'.
  */
-void env_run(struct Env *e) {
-  assert(e->env_status == ENV_RUNNABLE);
+void env_run(struct Env *env) {
+  assert(env->env_status == ENV_RUNNABLE);
   // WARNING BEGIN: DO NOT MODIFY FOLLOWING LINES!
 #ifdef MOS_PRE_ENV_RUN
   MOS_PRE_ENV_RUN_STMT
@@ -469,16 +472,22 @@ void env_run(struct Env *e) {
    *   If not, we may be switching from a previous env, so save its context into
    *   'curenv->env_tf' first.
    */
+  // 此时全局变量curenv中还是切换前的进程控制块，保存该进程的上下文
+  // 将栈帧中trap frame的信息转换为 Trapframe存储在 env_tf中
+  // 存储在 [KSTACKTOP - 1, KSTACKTOP) 的范围内，参考关于 SAVE_ALL 宏的内容
   if (curenv) {
     curenv->env_tf = *((struct Trapframe *)KSTACKTOP - 1);
   }
 
+  // 切换现在运行的进程
   /* Step 2: Change 'curenv' to 'e'. */
-  curenv = e;
+  curenv = env;
   curenv->env_runs++; // lab6
 
   /* Step 3: Change 'cur_pgdir' to 'curenv->env_pgdir', switching to its address space. */
   /* Exercise 3.8: Your code here. (1/2) */
+  // 设置全局变量cur_pgdir为当前进程页目录地址，在TLB重填时将用到该全局变量
+  cur_pgdir = curenv->env_pgdir;
 
   /* Step 4: Use 'env_pop_tf' to restore the curenv's saved context (registers) and return/go
    * to user mode.
@@ -489,7 +498,9 @@ void env_run(struct Env *e) {
    *    returning to the kernel caller, making 'env_run' a 'noreturn' function as well.
    */
   /* Exercise 3.8: Your code here. (2/2) */
-
+  // 根据栈帧还原进程上下文，并运行程序
+  // 恢复现场、异常返回
+  env_pop_tf(&curenv->env_tf, curenv->env_asid);
 }
 
 void env_check() {

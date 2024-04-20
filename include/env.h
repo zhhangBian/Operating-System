@@ -19,7 +19,7 @@
 // Control block of an environment (process).
 // PCB 是系统感知进程存在的唯一标志。进程与PCB 是一一对应的。
 struct Env {
-  // 保存进程的上下文环境：GRF+CP0
+  // 当前进程的的上下文环境：GRF+CP0
   // 发生进程调度、陷入内核时保存
   struct Trapframe env_tf;
   

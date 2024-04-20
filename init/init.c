@@ -53,6 +53,7 @@ void mips_init(u_int argc, char **argv, char **penv, u_int ram_low_size) {
   env_init();
 
   // lab3:
+  // 在内核初始化时设置两个进程
   ENV_CREATE_PRIORITY(user_bare_loop, 1);
   ENV_CREATE_PRIORITY(user_bare_loop, 2);
 
