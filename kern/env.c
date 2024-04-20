@@ -161,12 +161,12 @@ void env_init(void) {
   p->pp_ref++;
 
   base_pgdir = (Pde *)page2kva(p);
-  
-  map_segment(base_pgdir, 0, 
+
+  map_segment(base_pgdir, 0,
               PADDR(pages), UPAGES, // Pages的物理地址和虚拟地址
               ROUND(npage * sizeof(struct Page), PAGE_SIZE), // 映射的地址范围
               PTE_G);
-  map_segment(base_pgdir, 0, 
+  map_segment(base_pgdir, 0,
               PADDR(envs), UENVS, // Envs的物理地址和虚拟地址
               ROUND(NENV * sizeof(struct Env), PAGE_SIZE), // 映射的地址范围
               PTE_G);
@@ -196,8 +196,8 @@ static int env_setup_vm(struct Env *env) {
    *   See include/mmu.h for layout.
    */
   // 将模板页目录中UTOP到UVPT的虚拟地址空间对应的页表项复制到该新页中
-  memcpy(env->env_pgdir + PDX(UTOP), 
-         base_pgdir + PDX(UTOP), 
+  memcpy(env->env_pgdir + PDX(UTOP),
+         base_pgdir + PDX(UTOP),
          sizeof(Pde) * (PDX(UVPT) - PDX(UTOP)));
 
   /* Step 3: Map its own page table at 'UVPT' with readonly permission.
@@ -274,7 +274,7 @@ int env_alloc(struct Env **new, u_int parent_id) {
   // 如果上述操作都成功，则从空闲进程链表中移除该进程块
   LIST_REMOVE(env, env_link);
   *new = env;
-  
+
   return 0;
 }
 
@@ -296,7 +296,7 @@ int env_alloc(struct Env **new, u_int parent_id) {
  *   CPUs! QEMU doesn't simulate caching, allowing the OS to function correctly.
  */
 // load_icode_mapper是回调函数的具体实现，用于完成单个页面的加载过程
-static int load_icode_mapper(void *data, u_long virtual_address, size_t offset, 
+static int load_icode_mapper(void *data, u_long virtual_address, size_t offset,
                              u_int permission, const void *src, size_t len) {
   // 将 data 还原为进程控制块
   struct Env *env = (struct Env *)data;
@@ -378,7 +378,7 @@ struct Env *env_create(const void *binary, size_t size, int priority) {
    * 'env_sched_list' using 'TAILQ_INSERT_HEAD'. */
   /* Exercise 3.7: Your code here. (3/3) */
   load_icode(env, binary, size);
-	TAILQ_INSERT_HEAD(&env_sched_list, env, env_sched_link);
+  TAILQ_INSERT_HEAD(&env_sched_list, env, env_sched_link);
 
   return env;
 }
@@ -459,8 +459,8 @@ extern void env_pop_tf(struct Trapframe *tf, u_int asid) __attribute__((noreturn
  * Hints:
  *   You may use these functions: 'env_pop_tf'.
  */
-void env_run(struct Env *env) {
-  assert(env->env_status == ENV_RUNNABLE);
+void env_run(struct Env *e) {
+  assert(e->env_status == ENV_RUNNABLE);
   // WARNING BEGIN: DO NOT MODIFY FOLLOWING LINES!
 #ifdef MOS_PRE_ENV_RUN
   MOS_PRE_ENV_RUN_STMT
@@ -481,11 +481,10 @@ void env_run(struct Env *env) {
 
   // 切换现在运行的进程
   /* Step 2: Change 'curenv' to 'e'. */
-  curenv = env;
+  curenv = e;
   curenv->env_runs++; // lab6
 
   /* Step 3: Change 'cur_pgdir' to 'curenv->env_pgdir', switching to its address space. */
-  /* Exercise 3.8: Your code here. (1/2) */
   // 设置全局变量cur_pgdir为当前进程页目录地址，在TLB重填时将用到该全局变量
   cur_pgdir = curenv->env_pgdir;
 

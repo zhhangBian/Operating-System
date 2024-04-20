@@ -6,9 +6,13 @@
 .macro SAVE_ALL
 .set noat
 .set noreorder
+  // 将STATUS 寄存器的值读入k0 寄存器
 	mfc0    k0, CP0_STATUS
+  // 检查其UM位是否为0
+  // 如果是0则代表待处理异常是在内核态被触发的，是异常重入的情况
 	andi    k0, STATUS_UM
 	beqz    k0, 1f
+  // 对于非异常重入的情况，需要先将sp寄存器指向内核异常栈
 	move    k0, sp
 	/*
 	* If STATUS_UM is not set, the exception was triggered in kernel mode.
