@@ -21,7 +21,7 @@ exc_gen_entry:
   and     t0, t0, ~(STATUS_UM | STATUS_EXL | STATUS_IE)
   mtc0    t0, CP0_STATUS
   # 将Cause寄存器的内容拷贝到t0寄存器中
-  mtc0    t0, CP0_CAUSE
+  mfc0    t0, CP0_CAUSE
   # 取得Cause寄存器中的2~6位，也就是对应的异常码
   andi    t0, 0x7c
   # 以得到的异常码作为索引在exception_handlers数组中找到对应的中断处理函数

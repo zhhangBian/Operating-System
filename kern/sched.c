@@ -44,7 +44,7 @@ void schedule(int yield) {
    */
   // 是否需要切换进程
   if (yield || count<=0 || env==NULL || env->env_status!=ENV_RUNNABLE) {
-		if (env) {
+		if (env!=NULL) {
       // 从调度队列中移除当前进程
 			TAILQ_REMOVE(&env_sched_list, env, env_sched_link);
       // 如果之前的进程还是可运行的时，需要将其插入调度队列队尾，等待下一次轮到其执行

@@ -73,7 +73,7 @@ static void map_segment(Pde *pde_base, u_int asid,
   // 挨个将va内的地址映射到物理地址
   for (int i = 0; i < size; i += PAGE_SIZE) {
     // 将虚拟地址为va的页面映射到pa对应的页面控制块，并设置相关的权限
-    page_insert(pde_base, asid, pa2page(physical_address + i), virtual_address + i, permission | PTE_V);
+    page_insert(pde_base, asid, pa2page(physical_address+i), virtual_address+i, permission);
   }
 }
 
@@ -146,8 +146,8 @@ void env_init(void) {
   TAILQ_INIT(&env_sched_list);
 
   for (i = NENV - 1; i >= 0; i--) {
-    envs[i].env_status = ENV_FREE;
     LIST_INSERT_HEAD(&env_free_list, envs + i, env_link);
+    envs[i].env_status = ENV_FREE;
   }
 
   /*
@@ -304,7 +304,6 @@ static int load_icode_mapper(void *data, u_long virtual_address, size_t offset,
   int func_info;
 
   /* Step 1: Allocate a page with 'page_alloc'. */
-  /* Exercise 3.5: Your code here. (1/2) */
   if((func_info = page_alloc(&page)) != 0) {
     return func_info;
   }
@@ -366,17 +365,14 @@ static void load_icode(struct Env *env, const void *binary, size_t size) {
 struct Env *env_create(const void *binary, size_t size, int priority) {
   struct Env *env;
   /* Step 1: Use 'env_alloc' to alloc a new env, with 0 as 'parent_id'. */
-  /* Exercise 3.7: Your code here. (1/3) */
   env_alloc(&env,0);
 
   /* Step 2: Assign the 'priority' to 'e' and mark its 'env_status' as runnable. */
-  /* Exercise 3.7: Your code here. (2/3) */
   env->env_pri =  priority;
   env->env_status = ENV_RUNNABLE;
 
   /* Step 3: Use 'load_icode' to load the image from 'binary', and insert 'e' into
    * 'env_sched_list' using 'TAILQ_INSERT_HEAD'. */
-  /* Exercise 3.7: Your code here. (3/3) */
   load_icode(env, binary, size);
   TAILQ_INSERT_HEAD(&env_sched_list, env, env_sched_link);
 
@@ -496,7 +492,6 @@ void env_run(struct Env *e) {
    *  - 'env_pop_tf' is a 'noreturn' function: it restores PC from 'cp0_epc' thus not
    *    returning to the kernel caller, making 'env_run' a 'noreturn' function as well.
    */
-  /* Exercise 3.8: Your code here. (2/2) */
   // 根据栈帧还原进程上下文，并运行程序
   // 恢复现场、异常返回
   env_pop_tf(&curenv->env_tf, curenv->env_asid);
