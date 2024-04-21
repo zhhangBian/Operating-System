@@ -166,6 +166,7 @@ const Elf32_Ehdr *elf_from(const void *binary, size_t size);
 
 int elf_load_seg(Elf32_Phdr *ph, const void *bin, elf_mapper_t map_page, void *data);
 
+// 遍历所有程序头表
 #define ELF_FOREACH_PHDR_OFF(ph_off, ehdr) \
   (ph_off) = (ehdr)->e_phoff; \
   for (int _ph_idx = 0; _ph_idx < (ehdr)->e_phnum; ++_ph_idx, (ph_off) += (ehdr)->e_phentsize)

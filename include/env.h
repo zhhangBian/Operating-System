@@ -87,11 +87,11 @@ void envid2env_check(void);
     env_create(binary_##name##_start, (u_int)binary_##name##_size, priority); \
   })
 
-#define ENV_CREATE(x) \
+#define ENV_CREATE(name) \
   ({ \
-    extern u_char binary_##x##_start[]; \
-    extern u_int binary_##x##_size; \
-    env_create(binary_##x##_start, (u_int)binary_##x##_size, 1); \
+    extern u_char binary_##name##_start[]; \
+    extern u_int binary_##name##_size; \
+    env_create(binary_##name##_start, (u_int)binary_##name##_size, 1); \
   })
 
 #endif // !_ENV_H_

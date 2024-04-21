@@ -111,7 +111,7 @@
  o                      |      Exception Entry       | \|/            \|/
  o      ULIM     -----> +----------------------------+------------0x8000 0000-------
  o                      |         User VPT           |     PDMAP                /|\
- o      UVPT     -----> +----------------------------+------------0x7fc0 0000    |
+ o      UVPT 页表起始地址+----------------------------+------------0x7fc0 0000    |
  o                      |           pages            |     PDMAP                 |
  o      UPAGES   -----> +----------------------------+------------0x7f80 0000    |
  o                      |           envs             |     PDMAP                 |
@@ -144,6 +144,7 @@
 #define KSTACKTOP (ULIM + PDMAP)
 #define ULIM 0x80000000
 
+// 页表起始地址
 #define UVPT (ULIM - PDMAP)
 // 用户空间的Pages数组对应的虚拟地址起始处
 #define UPAGES (UVPT - PDMAP)

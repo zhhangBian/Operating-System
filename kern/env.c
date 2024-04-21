@@ -195,20 +195,16 @@ static int env_setup_vm(struct Env *env) {
   page_for_pde->pp_ref++;
   env->env_pgdir=(Pde*)page2kva(page_for_pde);
 
-  /* Step 2: Copy the template page directory 'base_pgdir' to 'e->env_pgdir'. */
-  /* Hint:
-   *   As a result, the address space of all envs is identical in [UTOP, UVPT).
-   *   See include/mmu.h for layout.
-   */
-  // 将模板页目录中UTOP到UVPT的虚拟地址空间对应的页表项复制到该新页中
-  memcpy(env->env_pgdir + PDX(UTOP),
-         base_pgdir + PDX(UTOP),
-         sizeof(Pde) * (PDX(UVPT) - PDX(UTOP)));
+  // 将模板页目录中UENVS到上限的虚拟地址空间对应的页表项复制到该新页中
+  // 这里的页目录依然是当前进程的：
+  // - 设置所有进程envs虚拟地址的又是就在这里
+  // - 否则无法在当前进程创建新进程
+  // 映射区域为ENVS到页表起始地址
+  memcpy(env->env_pgdir + PDX(UTOP),  // UTOP is UENVS
+        base_pgdir + PDX(UTOP),
+        sizeof(Pde) * (PDX(UVPT) - PDX(UTOP)));
 
-  /* Step 3: Map its own page table at 'UVPT' with readonly permission.
-   * As a result, user programs can read its page table through 'UVPT' */
   // 设置相关的页表自映射
-  // 将UVPT虚拟地址映射到页目录本身的物理地址，并设置只读权限
   env->env_pgdir[PDX(UVPT)] = PADDR(env->env_pgdir) | PTE_V;
   return 0;
 }
@@ -244,19 +240,25 @@ int env_alloc(struct Env **new, u_int parent_id) {
   env = LIST_FIRST(&env_free_list);
 
   // 初始化新进程的虚拟地址空间
+  // 设置UENS到页表起始地址的映射相同
   if ((func_info = env_setup_vm(env)) != 0) {
     return func_info;
   }
 
   /* Step 3: Initialize these fields for the new Env with appropriate values:
-   *   'env_user_tlb_mod_entry' (lab4), 'env_runs' (lab6), 'env_id' (lab3), 'env_asid' (lab3),
+   *   'env_user_tlb_mod_entry' (lab4), 
+   *   'env_runs' (lab6), 
+   *   'env_id' (lab3), 
+   *   'env_asid' (lab3),
    *   'env_parent_id' (lab3)
    */
   env->env_user_tlb_mod_entry = 0;  // for lab4
   env->env_runs = 0;	              // for lab6
-  // 设置env块的唯一id
+  // 设置进程的id
   env->env_id = mkenvid(env);
+  // 设置进程的父进程id
   env->env_parent_id = parent_id;
+  // 设置进程的asid
   if ((func_info = asid_alloc(&env->env_asid)) != 0) {
     return func_info;
   }
@@ -300,29 +302,29 @@ int env_alloc(struct Env **new, u_int parent_id) {
  *   coherence, which MOS has NOT implemented. This may result in unexpected behaviours on real
  *   CPUs! QEMU doesn't simulate caching, allowing the OS to function correctly.
  */
-// load_icode_mapper是回调函数的具体实现，用于完成单个页面的加载过程
-static int load_icode_mapper(void *data, u_long virtual_address, size_t offset,
-                             u_int permission, const void *src, size_t len) {
-  // 将 data 还原为进程控制块
-  struct Env *env = (struct Env *)data;
-  struct Page *page;
+// 用于完成单个页面的加载过程
+// src和len代表相应需要拷贝的数据，拷贝到距离offest的地方，可为空
+static int load_icode_mapper(void *env_data,
+                            u_long virtual_address,
+                            size_t offset,
+                            u_int permission,
+                            const void *src,
+                            size_t len) {
   int func_info;
-
-  /* Step 1: Allocate a page with 'page_alloc'. */
+  // 将 data 还原为进程控制块
+  struct Env *env = (struct Env *)env_data;
+  // 将数据加载到内存，需要先申请页面
+  struct Page *page;
   if((func_info = page_alloc(&page)) != 0) {
     return func_info;
   }
 
-  /* Step 2: If 'src' is not NULL, copy the 'len' bytes started at 'src' into 'offset' at this
-   * page. */
-  // Hint: You may want to use 'memcpy'.
+  // 如果存在需要拷贝的数据
   if (src != NULL) {
-    /* Exercise 3.5: Your code here. (2/2) */
     memcpy((void *)(page2kva(page) + offset), src, len);
   }
 
-  /* Step 3: Insert 'p' into 'env->env_pgdir' at 'va' with 'perm'. */
-  // 将虚拟地址映射到页
+  // 拷贝数据到对应虚拟地址后创建映射关系
   return page_insert(env->env_pgdir, env->env_asid, page, virtual_address, permission);
 }
 
@@ -331,32 +333,32 @@ static int load_icode_mapper(void *data, u_long virtual_address, size_t offset,
  *   'binary' points to an ELF executable image of 'size' bytes, which contains both text and data
  *   segments.
  */
-// 加载可执行文件binary到进程e的内存中
+// 加载可执行文件binary到进程env的内存中
 static void load_icode(struct Env *env, const void *binary, size_t size) {
-  /* Step 1: Use 'elf_from' to parse an ELF header from 'binary'. */
-  // 解析地址对应的文件是否为ELF类型
-  const Elf32_Ehdr *ehdr = elf_from(binary, size);
-  if (!ehdr) {
+  // 解析地址对应的文件是否为ELF类型，若是获取其节头表指针
+  const Elf32_Ehdr *elf_head = elf_from(binary, size);
+  if (elf_head==NULL) {
     panic("bad elf at %x", binary);
   }
 
   /* Step 2: Load the segments using 'ELF_FOREACH_PHDR_OFF' and 'elf_load_seg'.
    * As a loader, we just care about loadable segments, so parse only program headers here.
    */
-  size_t ph_off;
-  // 遍历所有程序头表
-  ELF_FOREACH_PHDR_OFF (ph_off, ehdr) {
-    Elf32_Phdr *ph = (Elf32_Phdr *)(binary + ph_off);
+  // 程序头表所在处与文件头的偏移量
+  size_t segment_off;
+  ELF_FOREACH_PHDR_OFF (segment_off, elf_head) {
+    Elf32_Phdr *segment_pointer = (Elf32_Phdr *)(binary + segment_off);
     // 该类型说明其对应的程序需要被加载到内存中
-    if (ph->p_type == PT_LOAD) {
-      // load_icode_mapper是回调函数的具体实现，用于完成单个页面的加载过程
-      panic_on(elf_load_seg(ph, binary + ph->p_offset, load_icode_mapper, env));
+    if (segment_pointer->p_type == PT_LOAD) {
+      // 将一个段加载到内存中
+      // load_icode_mapper用于完成单个页面的加载过程
+      panic_on(elf_load_seg(segment_pointer, binary + segment_pointer->p_offset, load_icode_mapper, env));
     }
   }
 
   // 将进程控制块中trap frame的epc cp0寄存器的值设置为ELF文件中设定的程序入口地址
   // 指示了进程恢复运行时PC应恢复到的位置
-  env->env_tf.cp0_epc = ehdr->e_entry;
+  env->env_tf.cp0_epc = elf_head->e_entry;
 }
 
 /* Overview:
@@ -367,22 +369,22 @@ static void load_icode(struct Env *env, const void *binary, size_t size) {
  * Hint:
  *   'binary' is an ELF executable image in memory.
  */
-// 创建一个**运行的**进程，导入文件，并设置进程优先级（用于进程调度）
+// 创建一个进程，并开始运行，加载可执行文件，并设置进程优先级（用于进程调度）
 // 在此处创建的进程没有父进程
 struct Env *env_create(const void *binary, size_t size, int priority) {
   struct Env *env;
-  /* Step 1: Use 'env_alloc' to alloc a new env, with 0 as 'parent_id'. */
   // 获取一个空闲进程块，在此处创建的进程没有父进程
+  // 对该进程块初始化虚拟地址：将UEVS
   env_alloc(&env,0);
 
-  /* Step 2: Assign the 'priority' to 'e' and mark its 'env_status' as runnable. */
-  // 设置进程的
+  // 设置进程的优先级
   env->env_pri =  priority;
+  // 设置进程的状态为就绪/运行：在MOS中不区分，区别仅在于时候获取时间片
   env->env_status = ENV_RUNNABLE;
 
-  /* Step 3: Use 'load_icode' to load the image from 'binary', and insert 'e' into
-   * 'env_sched_list' using 'TAILQ_INSERT_HEAD'. */
+  // 加载可执行文件到env的内存中
   load_icode(env, binary, size);
+  // 将进程块插入到调度队列的头
   TAILQ_INSERT_HEAD(&env_sched_list, env, env_sched_link);
 
   return env;
