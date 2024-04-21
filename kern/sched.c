@@ -68,7 +68,7 @@ void schedule(int yield) {
     count = env->env_pri;
   }
   // 无论是否进行切换，都将剩余时间片长度count减去1
-  // 然后调用env_run 函数，继续运行当前进程curenv
+  // 然后调用env_run函数，继续运行当前进程curenv
   count--;
   env_run(env);
 }

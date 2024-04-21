@@ -3,33 +3,34 @@
 
 .macro BUILD_HANDLER exception handler
 NESTED(handle_\exception, TF_SIZE + 8, zero)
-	move    a0, sp
-	addiu   sp, sp, -8
-	jal     \handler
-	addiu   sp, sp, 8
-	j       ret_from_exception
+  move    a0, sp
+  addiu   sp, sp, -8
+  jal     \handler
+  addiu   sp, sp, 8
+  j       ret_from_exception
 END(handle_\exception)
 .endm
 
 .text
 # 恢复现场
 FEXPORT(ret_from_exception)
-	RESTORE_ALL
-	eret
+  RESTORE_ALL
+  eret
+
 # 通过.text.exc_gen_entry代码段的分发，最终调用handle_int函数进行处理
 NESTED(handle_int, TF_SIZE, zero)
   # 保存相应的中断信息
-	mfc0    t0, CP0_CAUSE
-	mfc0    t2, CP0_STATUS
-	and     t0, t2
-	andi    t1, t0, STATUS_IM7
+  mfc0    t0, CP0_CAUSE
+  mfc0    t2, CP0_STATUS
+  and     t0, t2
+  andi    t1, t0, STATUS_IM7
   # 根据Cause寄存器的值判断是否是Timer对应的7号中断位引发的时钟中断
-	bnez    t1, timer_irq
+  bnez    t1, timer_irq
 timer_irq:
   # 设置参数：不为强制切换
-	li      a0, 0
+  li      a0, 0
   # 跳转到对应的调度函数，进行进程调度
-	j       schedule
+  j       schedule
 END(handle_int)
 
 BUILD_HANDLER tlb do_tlb_refill

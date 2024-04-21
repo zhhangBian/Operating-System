@@ -4,11 +4,11 @@
 // 解析ELF文件头的部分，如果是ELF文件返回对应节头表指针，否则返回NULL
 const Elf32_Ehdr *elf_from(const void *binary, size_t size) {
   const Elf32_Ehdr *ehdr = (const Elf32_Ehdr *)binary;
-  if (size >= sizeof(Elf32_Ehdr) && 
+  if (size >= sizeof(Elf32_Ehdr) &&
       ehdr->e_ident[EI_MAG0] == ELFMAG0 &&
-      ehdr->e_ident[EI_MAG1] == ELFMAG1 && 
+      ehdr->e_ident[EI_MAG1] == ELFMAG1 &&
       ehdr->e_ident[EI_MAG2] == ELFMAG2 &&
-      ehdr->e_ident[EI_MAG3] == ELFMAG3 && 
+      ehdr->e_ident[EI_MAG3] == ELFMAG3 &&
       ehdr->e_type == 2) {
     // 是可执行文件类型
     return ehdr;
@@ -28,9 +28,9 @@ const Elf32_Ehdr *elf_from(const void *binary, size_t size) {
  *   If success, the entry point of `binary` will be stored in `start`
  */
 // 负责将ELF文件的一个段加载到进程中：修改进程的页表使得能够访问
-int elf_load_seg(Elf32_Phdr *segment_pointer, 
-                const void *segment_content, 
-                elf_mapper_t load_page, 
+int elf_load_seg(Elf32_Phdr *segment_pointer,
+                const void *segment_content,
+                elf_mapper_t load_page,
                 void *env_data) {
   // 段所在的虚拟地址
   u_long virtual_address = segment_pointer->p_vaddr;
@@ -53,7 +53,7 @@ int elf_load_seg(Elf32_Phdr *segment_pointer,
   u_long offset = virtual_address - ROUNDDOWN(virtual_address, PAGE_SIZE);
   // 如果也没有对齐
   if (offset != 0) {
-    func_info = 
+    func_info =
       load_page(
         env_data,         // 需要加载的进程控制块
         virtual_address,  // 需要加载到的目的地虚拟地址
@@ -72,7 +72,7 @@ int elf_load_seg(Elf32_Phdr *segment_pointer,
   for (i = ((offset!=0) ? MIN(segment_size_file, PAGE_SIZE - offset) : 0);
         i < segment_size_file;
         i += PAGE_SIZE) {
-    func_info = 
+    func_info =
       load_page(
         env_data,             // 需要加载的进程控制块
         virtual_address + i,  // 需要加载到的目的地虚拟地址
@@ -88,12 +88,12 @@ int elf_load_seg(Elf32_Phdr *segment_pointer,
 
   // 最后处理段大小大于数据大小的情况
   while (i < segment_size_mem) {
-    func_info = 
+    func_info =
       load_page(
-        env_data, 
-        virtual_address + i, 
-        0, 
-        permission, 
+        env_data,
+        virtual_address + i,
+        0,
+        permission,
         NULL, // 没有文件需要加载，填充0即可
         MIN(segment_size_mem - i, PAGE_SIZE)
       );

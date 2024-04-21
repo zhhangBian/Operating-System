@@ -481,7 +481,7 @@ void env_run(struct Env *e) {
    */
   // 此时全局变量curenv中还是切换前的进程控制块，保存该进程的上下文
   // 将栈帧中trap frame的信息转换为 Trapframe存储在 env_tf中
-  // 存储在 [KSTACKTOP - 1, KSTACKTOP) 的范围内，参考关于 SAVE_ALL 宏的内容
+  // 存储在  [KSTACKTOP-1 , KSTACKTOP)  的范围内，参考关于 SAVE_ALL 宏的内容
   if (curenv) {
     curenv->env_tf = *((struct Trapframe *)KSTACKTOP - 1);
   }
