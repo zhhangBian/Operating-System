@@ -244,7 +244,7 @@ static int pgdir_walk(Pde *pde_base, u_long virtural_address, int if_create, Pte
  *   The `pp_ref` should be incremented if the insertion succeeds.
  */
 // 增加页表映射关系
-// 将虚拟地址 virtual_address 映射到页控制块 page_pointer 对应的物理页面，并将页表项权限为设置为perm
+// 将虚拟地址 virtual_address 映射到页控制块page_pointer对应的物理页面，并将页表项权限为设置为perm
 int page_insert(Pde *pde_base, u_int asid, struct Page *page_pointer,
                 u_long virtual_address, u_int perm) {
   Pte *pte;

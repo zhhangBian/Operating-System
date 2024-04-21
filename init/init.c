@@ -50,10 +50,12 @@ void mips_init(u_int argc, char **argv, char **penv, u_int ram_low_size) {
   page_init();
 
   // lab3:
+  // 对envs进行初始化，维护空闲进程列表
+  // 并创建模板页目录，方便后续使用
   env_init();
 
   // lab3:
-  // 在内核初始化时设置两个进程
+  // 在内核初始化时设置两个进程，并开始运行（创建即运行）
   ENV_CREATE_PRIORITY(user_bare_loop, 1);
   ENV_CREATE_PRIORITY(user_bare_loop, 2);
 

@@ -69,7 +69,7 @@
  * this very LIST_ENTRY, so that if we want to remove this list entry,
  * we can do *le_prev = le_next to update the structure pointing at us.
  */
-// 相当于一个特殊类型，是一个链表项。创建一个类型为 node 的链表元素。
+// 相当于一个特殊类型，是一个链表项。创建一个类型为node的链表元素。
 #define LIST_ENTRY(node)\
   struct {\
     struct node *le_next;  /* next element */\
@@ -248,6 +248,8 @@
     *(elm)->point_area.tqe_prev = (elm)->point_area.tqe_next;\
   } while (/*CONSTCOND*/ 0)
 
+// 遍历链表
+// TAILQ_FOREACH(tmp, &page_free_list, pp_link) {}
 #define TAILQ_FOREACH(var, head, point_area)\
   for ((var) = ((head)->tqh_first); (var); (var) = ((var)->point_area.tqe_next))
 

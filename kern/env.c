@@ -61,18 +61,20 @@ static void asid_free(u_int i) {
  * Pre-Condition:
  *   'pa', 'va' and 'size' are aligned to 'PAGE_SIZE'.
  */
-// 广义的 page_insert。
-// 在页目录 pgdir 中，将虚拟地址空间 [va, va+size) 映射到到物理地址空间 [pa, pa+size)，并赋予 perm 权限。
-static void map_segment(Pde *pde_base, u_int asid,
-                        u_long physical_address, u_long virtual_address,
-                        u_int size, u_int permission) {
+// 在页目录pgdir中，将虚拟地址空间 [va, va+size) 映射到到物理地址空间 [pa, pa+size)，并赋予 perm 权限。
+static void map_segment(Pde *pde_base,            // 需要写入映射关系的页目录
+                        u_int asid,               // 进程的asid，只用来更新映射关系后刷新TLB
+                        u_long physical_address,  // 需要映射的物理地址
+                        u_long virtual_address,   // 需要映射的虚拟地址
+                        u_int size,               // 需要映射的范围
+                        u_int permission) {
   assert(physical_address % PAGE_SIZE == 0);
   assert(virtual_address % PAGE_SIZE == 0);
   assert(size % PAGE_SIZE == 0);
 
   // 挨个将va内的地址映射到物理地址
   for (int i = 0; i < size; i += PAGE_SIZE) {
-    // 将虚拟地址为va的页面映射到pa对应的页面控制块，并设置相关的权限
+    // 将虚拟地址为va的页面映射到页控制块对应的页面控制块，并设置相关的权限
     page_insert(pde_base, asid, pa2page(physical_address+i), virtual_address+i, permission);
   }
 }
@@ -141,33 +143,36 @@ int envid2env(u_int envid, struct Env **penv, int checkperm) {
  */
 void env_init(void) {
   int i;
-  // 初始化空闲进程列表  和  调度进程列表
+  // 初始化空闲进程列表
   LIST_INIT(&env_free_list);
+  // 初始化调度进程列表
   TAILQ_INIT(&env_sched_list);
-
+  // 初始化进程块，准备后期调度
   for (i = NENV - 1; i >= 0; i--) {
     LIST_INSERT_HEAD(&env_free_list, envs + i, env_link);
     envs[i].env_status = ENV_FREE;
   }
 
-  /*
-   * Here we first map them into the *template* page directory 'base_pgdir'.
-   * Later in 'env_setup_vm', we will copy them into each 'env_pgdir'.
-   */
-  // 创建模板页目录，将pages和envs映射到 UPAGES 和 UENVS 的空间中，使得每个进程的对应虚拟空间都为pages和envs
+  // 创建模板页目录，将pages和envs映射到 UPAGES 和 UENVS 的空间中
+  // 使得每个进程的对应虚拟空间都可以访问pages和envs
   // 设置相关权限为PTE_G，使得只读
-  struct Page *p;
-  panic_on(page_alloc(&p));
-  p->pp_ref++;
-
-  base_pgdir = (Pde *)page2kva(p);
-
-  map_segment(base_pgdir, 0,
-              PADDR(pages), UPAGES, // Pages的物理地址和虚拟地址
+  struct Page *template_pde_page;
+  panic_on(page_alloc(&template_pde_page));
+  template_pde_page->pp_ref++;
+  // 获取模板页目录的虚拟地址，此后所有进程块中都相同
+  base_pgdir = (Pde *)page2kva(template_pde_page);
+  // 在页目录中进行映射，将[va, va+size)映射到到物理地址空间[pa, pa+size)，并赋予 perm 权限
+  // 这样使得在所有进程中，通过相同的虚拟地址都可以访问到pages和envs，暴露部分内核信息
+  map_segment(base_pgdir,   // 需要操作的页目录
+              0,            // 进程的asid，只用来更新映射关系后刷新TLB
+              PADDR(pages), // 映射的物理地址起始位置
+              UPAGES,       // 映射的虚拟地址起始位置：Pages数组对应的虚拟地址起始处
               ROUND(npage * sizeof(struct Page), PAGE_SIZE), // 映射的地址范围
-              PTE_G);
-  map_segment(base_pgdir, 0,
-              PADDR(envs), UENVS, // Envs的物理地址和虚拟地址
+              PTE_G);       // 映射后的权限
+  map_segment(base_pgdir,
+              0,
+              PADDR(envs),  // Envs数组的物理地址
+              UENVS,        // 映射的虚拟地址起始位置：Envs数组对应的虚拟地址起始处
               ROUND(NENV * sizeof(struct Env), PAGE_SIZE), // 映射的地址范围
               PTE_G);
 }
@@ -362,12 +367,16 @@ static void load_icode(struct Env *env, const void *binary, size_t size) {
  * Hint:
  *   'binary' is an ELF executable image in memory.
  */
+// 创建一个**运行的**进程，导入文件，并设置进程优先级（用于进程调度）
+// 在此处创建的进程没有父进程
 struct Env *env_create(const void *binary, size_t size, int priority) {
   struct Env *env;
   /* Step 1: Use 'env_alloc' to alloc a new env, with 0 as 'parent_id'. */
+  // 获取一个空闲进程块，在此处创建的进程没有父进程
   env_alloc(&env,0);
 
   /* Step 2: Assign the 'priority' to 'e' and mark its 'env_status' as runnable. */
+  // 设置进程的
   env->env_pri =  priority;
   env->env_status = ENV_RUNNABLE;
 

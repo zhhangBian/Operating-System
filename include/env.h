@@ -7,7 +7,7 @@
 #include <types.h>
 
 #define LOG2NENV 10
-// 进程快的数量
+// 进程块的数量
 #define NENV (1 << LOG2NENV)
 #define ENVX(envid) ((envid) & (NENV - 1))
 
@@ -17,33 +17,34 @@
 #define ENV_NOT_RUNNABLE 2
 
 // Control block of an environment (process).
-// PCB 是系统感知进程存在的唯一标志。进程与PCB 是一一对应的。
+// Env就是PCB，PCB是系统感知进程存在的唯一标志。进程与PCB 是一一对应的。
 struct Env {
   // 当前进程的的上下文环境：GRF+CP0
   // 发生进程调度、陷入内核时保存
   struct Trapframe env_tf;
-  
-  // 空闲进程链表的头节点
+
+  // 构造空闲链表的指针域
   LIST_ENTRY(Env) env_link;
-  
+
   // 进程id，唯一
   u_int env_id;
-  u_int env_asid;			 // ASID of this env
+  // 进程的ASID，用于TLB识别相应的虚拟地址，唯一
+  u_int env_asid;
   // 进程的父进程的id
   u_int env_parent_id;
-  
+
   // 记录进程的状态
   // - ENV_FREE : 进程控制块没有被任何进程使用，处于进程空闲链表中。
   // - ENV_NOT_RUNNABLE : 处于阻塞状态
   // - ENV_RUNNABLE : 该进程处于执行状态或就绪状态，即其可能是正在运行的，也可能正在等待被调度。
   u_int env_status;
-  
+
   // 该进程的页目录地址（虚拟地址）
   Pde *env_pgdir;
-  
-  // 构造调度队列
+
+  // 构造调度链表的指针域
   TAILQ_ENTRY(Env) env_sched_link; // intrusive entry in 'env_sched_list'
-  
+
   // 进程优先级
   u_int env_pri;
 
@@ -78,11 +79,12 @@ void env_run(struct Env *e) __attribute__((noreturn));
 void env_check(void);
 void envid2env_check(void);
 
-#define ENV_CREATE_PRIORITY(x, y) \
+// 使用宏拼接指令，在C中较难以函数方法实现
+#define ENV_CREATE_PRIORITY(name, priority) \
   ({ \
-    extern u_char binary_##x##_start[]; \
-    extern u_int binary_##x##_size; \
-    env_create(binary_##x##_start, (u_int)binary_##x##_size, y); \
+    extern u_char binary_##name##_start[]; \
+    extern u_int binary_##name##_size; \
+    env_create(binary_##name##_start, (u_int)binary_##name##_size, priority); \
   })
 
 #define ENV_CREATE(x) \
