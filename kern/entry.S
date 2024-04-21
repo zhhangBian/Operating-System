@@ -5,6 +5,8 @@
 tlb_miss_entry:
   j       exc_gen_entry
 
+# 异常分发程序，当发生异常时由硬件自动跳转
+# 在链接时自动将相应程序装入地址（虚拟地址），以实现当前页表下的异常处理
 .section .text.exc_gen_entry
 exc_gen_entry:
   # 使用SAVE_ALL 宏将当前上下文保存到内核的异常栈中

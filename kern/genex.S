@@ -12,19 +12,22 @@ END(handle_\exception)
 .endm
 
 .text
-
+# 恢复现场
 FEXPORT(ret_from_exception)
 	RESTORE_ALL
 	eret
 
 NESTED(handle_int, TF_SIZE, zero)
+  # 保存相应的中断信息
 	mfc0    t0, CP0_CAUSE
 	mfc0    t2, CP0_STATUS
 	and     t0, t2
 	andi    t1, t0, STATUS_IM7
 	bnez    t1, timer_irq
 timer_irq:
+  # 设置参数：不为强制切换
 	li      a0, 0
+  # 跳转到对应的调度函数，进行进程调度
 	j       schedule
 END(handle_int)
 

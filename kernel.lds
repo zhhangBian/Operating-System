@@ -7,7 +7,10 @@ OUTPUT_ARCH(mips)
  * Set the ENTRY point of the program to _start.
  */
 ENTRY(_start)
-
+/*
+ *  所有地址均为虚拟地址
+ *  在程序连接时自动设置相应段、装入相应程序
+*/
 SECTIONS {
 /*
  *  为操作系统增加异常分发功能
@@ -15,7 +18,6 @@ SECTIONS {
  *  在4Kc 中，这两个段分别要求放到地址0x80000180 和0x80000000 处
  *  它们是异常处理程序的入口地址。
 */
-
   . = 0x80000000;
   .tlb_miss_entry : {
     *(.text.tlb_miss_entry)

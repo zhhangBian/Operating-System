@@ -487,7 +487,6 @@ void env_run(struct Env *e) {
   }
 
   // 切换现在运行的进程
-  /* Step 2: Change 'curenv' to 'e'. */
   curenv = e;
   curenv->env_runs++; // lab6
 
@@ -495,16 +494,9 @@ void env_run(struct Env *e) {
   // 设置全局变量cur_pgdir为当前进程页目录地址，在TLB重填时将用到该全局变量
   cur_pgdir = curenv->env_pgdir;
 
-  /* Step 4: Use 'env_pop_tf' to restore the curenv's saved context (registers) and return/go
-   * to user mode.
-   *
-   * Hint:
-   *  - You should use 'curenv->env_asid' here.
-   *  - 'env_pop_tf' is a 'noreturn' function: it restores PC from 'cp0_epc' thus not
-   *    returning to the kernel caller, making 'env_run' a 'noreturn' function as well.
-   */
   // 根据栈帧还原进程上下文，并运行程序
-  // 恢复现场、异常返回
+  // 恢复现场、设置时钟中断、异常返回
+  // 这是一个汇编函数
   env_pop_tf(&curenv->env_tf, curenv->env_asid);
 }
 

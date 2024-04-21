@@ -11,6 +11,7 @@ LEAF(env_pop_tf)
 	mtc0    a1, CP0_ENTRYHI
   # 将sp寄存器地址设置为当前进程的trap frame地址
 	move    sp, a0
+  # 设置相应的时钟
 	RESET_KCLOCK
 	j       ret_from_exception
 END(env_pop_tf)
