@@ -13,5 +13,6 @@ LEAF(env_pop_tf)
 	move    sp, a0
   # 设置相应的时钟
 	RESET_KCLOCK
+  # 从异常处理中返回，将使用当前进程的trap frame恢复上下文
 	j       ret_from_exception
 END(env_pop_tf)

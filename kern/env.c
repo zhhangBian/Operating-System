@@ -489,12 +489,10 @@ void env_run(struct Env *e) {
   // 切换现在运行的进程
   curenv = e;
   curenv->env_runs++; // lab6
-
-  /* Step 3: Change 'cur_pgdir' to 'curenv->env_pgdir', switching to its address space. */
   // 设置全局变量cur_pgdir为当前进程页目录地址，在TLB重填时将用到该全局变量
   cur_pgdir = curenv->env_pgdir;
 
-  // 根据栈帧还原进程上下文，并运行程序
+  // 根据栈帧还原进程上下文，并进行进程调度、运行程序
   // 恢复现场、设置时钟中断、异常返回
   // 这是一个汇编函数
   env_pop_tf(&curenv->env_tf, curenv->env_asid);
