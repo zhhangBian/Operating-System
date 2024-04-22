@@ -159,8 +159,7 @@ typedef struct {
 
 /* Utils provided by our ELF loader. */
 // 回调函数
-typedef int (*elf_mapper_t)(void *data, u_long va, size_t offset, u_int perm, const void *src,
-          size_t len);
+typedef int (*elf_mapper_t)(void *data, u_long va, size_t offset, u_int perm, const void *src, size_t len);
 
 const Elf32_Ehdr *elf_from(const void *binary, size_t size);
 

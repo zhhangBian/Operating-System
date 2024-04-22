@@ -28,10 +28,10 @@ const Elf32_Ehdr *elf_from(const void *binary, size_t size) {
  *   If success, the entry point of `binary` will be stored in `start`
  */
 // 负责将ELF文件的一个段加载到进程中：修改进程的页表使得能够访问
-int elf_load_seg(Elf32_Phdr *segment_pointer,
-                const void *segment_content,
-                elf_mapper_t load_page,
-                void *env_data) {
+int elf_load_seg(Elf32_Phdr *segment_pointer, // 相应的段指针
+                const void *segment_content,  // 需要加载的数据的虚拟地址
+                elf_mapper_t load_page,       // 加载单个页面的回调函数
+                void *env_data) {             // 需要加载的进程控制块
   // 段所在的虚拟地址
   u_long virtual_address = segment_pointer->p_vaddr;
   // 文件中段的大小
