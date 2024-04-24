@@ -49,15 +49,15 @@ void do_ri (struct Trapframe *tf) {
 	int *instr_p = (int *)kva;
 	int instr = *instr_p;
 
-	int func_a = instr>>26;
-	int is_pm = (instr & 0x3f)!=0;
-	int is_ca = (instr & 0x3e)!=0;
+	int rs = (instr>>21)&0x1f;
+	int rt = (instr>>16)&0x1f;
+	int rd = (instr>>11)&0x1f;
 
-	int rs = (instr & (0x1f << 21))>>21;
-	int rt = (instr & (0x1f << 15))>>16;
-	int rd = (instr & (0x1f << 11))>>11;
+	int func = (instr>>26)&0x3f;
+	int shamt = (instr>>6)&0x1f;
+	int low6 = instr&0x3f;
 
-	if(is_pm) {
+	if(func==0 && shamt==0 && low6==0x3f) {
 		int rs_num=tf->regs[rs];
 		int rt_num=tf->regs[rt];
 		
@@ -66,26 +66,25 @@ void do_ri (struct Trapframe *tf) {
 			u_int rs_i = rs_num & (0xff<<i);
 			u_int rt_i = rt_num & (0xff<<i);
 			if(rs_i < rt_i) {
-				rd_num = rd | rt_i;
+				rd_num = rd_num | rt_i;
 			}
 			else {
-				rd_num = rd | rs_i;
+				rd_num = rd_num | rs_i;
 			}
 		}
 
 		tf->regs[rd]=rd_num;
 	}
-	else if(is_ca) {
+	else if(func==0 && shamt==0 && low6==0x3e) {
 		int rs_nu=tf->regs[rs];
-		int tmp = rs_nu;
 		int *rs_num = (int *)rs_nu;
+		int tmp = *rs_num;
 		int rt_num=tf->regs[rt];
 		int rd_num=tf->regs[rd];
 		if(*rs_num == rt_num) {
 			*rs_num == rd_num;
 		}
 		tf->regs[rd] = tmp;
-
 	} 
 	else {
 		
