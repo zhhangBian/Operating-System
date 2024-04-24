@@ -48,8 +48,7 @@ void schedule(int yield) {
   if (yield ||      // 强制切换：通过参数
       count<=0 ||   // 当前进程分配时间片结束
       env==NULL ||  // 当前无进程：刚初始化，切换一次进行分配
-      env->env_status!=ENV_RUNNABLE // 当前进程被阻塞
-  ) {
+      env->env_status!=ENV_RUNNABLE) {  // 当前进程被阻塞
     if (env!=NULL) {
       // 从调度队列中移除当前进程
       TAILQ_REMOVE(&env_sched_list, env, env_sched_link);

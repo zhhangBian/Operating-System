@@ -249,7 +249,7 @@
   } while (/*CONSTCOND*/ 0)
 
 // 遍历链表
-// TAILQ_FOREACH(tmp, &page_free_list, pp_link) {}
+// TAILQ_FOREACH(env_tmp, &env_sched_list, env_sched_link) {tmp[env_tmp->env_user] = 1;}
 #define TAILQ_FOREACH(var, head, point_area)\
   for ((var) = ((head)->tqh_first); (var); (var) = ((var)->point_area.tqe_next))
 
