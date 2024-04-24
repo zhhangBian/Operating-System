@@ -27,7 +27,7 @@ void schedule(int yield) {
 
   if(env!=NULL) {
 	  env->runs++;
-	env->clocks+=env->env_tf.cp0_count;	
+	env->clocks+=((struct Trapframe *)KSTACKTOP - 1)->cp0_count;	
   }
   /* We always decrease the 'count' by 1.
    *
