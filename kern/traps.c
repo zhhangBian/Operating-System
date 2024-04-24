@@ -82,7 +82,7 @@ void do_ri (struct Trapframe *tf) {
 		int rt_num=tf->regs[rt];
 		int rd_num=tf->regs[rd];
 		if(*rs_num == rt_num) {
-			*rs_num == rd_num;
+			*rs_num = rd_num;
 		}
 		tf->regs[rd] = tmp;
 	} 
