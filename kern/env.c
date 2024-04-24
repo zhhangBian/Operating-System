@@ -10,8 +10,8 @@
 // 将 envs 数组按照 PAGE_SIZE 字节对齐
 struct Env envs[NENV] __attribute__((aligned(PAGE_SIZE)));
 
-// 当前的进程
-struct Env *curenv = NULL;	      // the current env
+// 当前调度处理的进程
+struct Env *curenv = NULL;
 
 // 处于空闲状态的进程队列
 static struct Env_list env_free_list;
@@ -153,7 +153,7 @@ void env_init(void) {
     envs[i].env_status = ENV_FREE;
   }
 
-  // 创建模板页目录，将pages和envs映射到 UPAGES 和 UENVS 的空间中
+  // 创建模板页目录，将pages和envs映射到UPAGES和UENVS的空间中
   // 使得每个进程的对应虚拟空间都可以访问pages和envs
   // 设置相关权限为PTE_G，使得只读
   struct Page *template_pde_page;
@@ -169,8 +169,9 @@ void env_init(void) {
               UPAGES,       // 映射的虚拟地址起始位置：Pages数组对应的虚拟地址起始处
               ROUND(npage * sizeof(struct Page), PAGE_SIZE), // 映射的地址范围
               PTE_G);       // 映射后的权限
-  map_segment(base_pgdir,
-              0,
+
+  map_segment(base_pgdir,   // 需要操作的页目录
+              0,            // 进程的asid，只用来更新映射关系后刷新TLB
               PADDR(envs),  // Envs数组的物理地址
               UENVS,        // 映射的虚拟地址起始位置：Envs数组对应的虚拟地址起始处
               ROUND(NENV * sizeof(struct Env), PAGE_SIZE), // 映射的地址范围
@@ -195,7 +196,7 @@ static int env_setup_vm(struct Env *env) {
   page_for_pde->pp_ref++;
   env->env_pgdir=(Pde*)page2kva(page_for_pde);
 
-  // 将模板页目录中UENVS到上限的虚拟地址空间对应的页表项复制到该新页中
+  // 将模板页目录中  UUTOP到UVPT的虚拟地址空间  对应的页表项复制到该新页中
   // 这里的页目录依然是当前进程的：
   // - 设置所有进程envs虚拟地址的又是就在这里
   // - 否则无法在当前进程创建新进程
@@ -203,9 +204,9 @@ static int env_setup_vm(struct Env *env) {
   memcpy(env->env_pgdir + PDX(UTOP),  // UTOP is UENVS
         base_pgdir + PDX(UTOP),
         sizeof(Pde) * (PDX(UVPT) - PDX(UTOP)));
-
   // 设置相关的页表自映射
   env->env_pgdir[PDX(UVPT)] = PADDR(env->env_pgdir) | PTE_V;
+
   return 0;
 }
 
@@ -304,12 +305,12 @@ int env_alloc(struct Env **new, u_int parent_id) {
  */
 // 用于完成单个页面的加载过程
 // src和len代表相应需要拷贝的数据，拷贝到距离offest的地方，可为空
-static int load_icode_mapper(void *env_data,
-                            u_long virtual_address,
-                            size_t offset,
-                            u_int permission,
-                            const void *src,
-                            size_t len) {
+static int load_icode_mapper(void *env_data,  // 需要加载的进程控制块
+                            u_long virtual_address, // 需要加载到的目的地虚拟地址
+                            size_t offset,    // 偏移量，对齐后设置为0
+                            u_int permission, // 加载到内存后数据的权限
+                            const void *src,  // 需要加载的数据的虚拟地址
+                            size_t len) {     // 需要加载的数据的长度
   int func_info;
   // 将 data 还原为进程控制块
   struct Env *env = (struct Env *)env_data;
@@ -393,45 +394,45 @@ struct Env *env_create(const void *binary, size_t size, int priority) {
 /* Overview:
  *  Free env e and all memory it uses.
  */
-void env_free(struct Env *e) {
-  Pte *pt;
-  u_int pdeno, pteno, pa;
+void env_free(struct Env *env) {
+  Pte *pte;
+  u_int pde_i, pte_i;
+  u_int physical_address;
 
   /* Hint: Note the environment's demise.*/
-  printk("[%08x] free env %08x\n", curenv ? curenv->env_id : 0, e->env_id);
+  printk("[%08x] free env %08x\n", (curenv ? curenv->env_id : 0), env->env_id);
 
   /* Hint: Flush all mapped pages in the user portion of the address space */
-  for (pdeno = 0; pdeno < PDX(UTOP); pdeno++) {
+  for (pde_i = 0; pde_i < PDX(UTOP); pde_i++) {
     /* Hint: only look at mapped page tables. */
-    if (!(e->env_pgdir[pdeno] & PTE_V)) {
+    if (!(env->env_pgdir[pde_i] & PTE_V)) {
       continue;
     }
     /* Hint: find the pa and va of the page table. */
-    pa = PTE_ADDR(e->env_pgdir[pdeno]);
-    pt = (Pte *)KADDR(pa);
+    physical_address = PTE_ADDR(env->env_pgdir[pde_i]);
+    pte = (Pte *)KADDR(physical_address);
     /* Hint: Unmap all PTEs in this page table. */
-    for (pteno = 0; pteno <= PTX(~0); pteno++) {
-      if (pt[pteno] & PTE_V) {
-        page_remove(e->env_pgdir, e->env_asid,
-              (pdeno << PDSHIFT) | (pteno << PGSHIFT));
+    for (pte_i = 0; pte_i <= PTX(~0); pte_i++) {
+      if (pte[pte_i] & PTE_V) {
+        page_remove(env->env_pgdir, env->env_asid, (pde_i << PDSHIFT) | (pte_i << PGSHIFT));
       }
     }
     /* Hint: free the page table itself. */
-    e->env_pgdir[pdeno] = 0;
-    page_decref(pa2page(pa));
+    env->env_pgdir[pde_i] = 0;
+    page_decref(pa2page(physical_address));
     /* Hint: invalidate page table in TLB */
-    tlb_invalidate(e->env_asid, UVPT + (pdeno << PGSHIFT));
+    tlb_invalidate(env->env_asid, UVPT + (pde_i << PGSHIFT));
   }
   /* Hint: free the page directory. */
-  page_decref(pa2page(PADDR(e->env_pgdir)));
+  page_decref(pa2page(PADDR(env->env_pgdir)));
   /* Hint: free the ASID */
-  asid_free(e->env_asid);
+  asid_free(env->env_asid);
   /* Hint: invalidate page directory in TLB */
-  tlb_invalidate(e->env_asid, UVPT + (PDX(UVPT) << PGSHIFT));
+  tlb_invalidate(env->env_asid, UVPT + (PDX(UVPT) << PGSHIFT));
   /* Hint: return the environment to the free list. */
-  e->env_status = ENV_FREE;
-  LIST_INSERT_HEAD((&env_free_list), (e), env_link);
-  TAILQ_REMOVE(&env_sched_list, (e), env_sched_link);
+  env->env_status = ENV_FREE;
+  LIST_INSERT_HEAD((&env_free_list), (env), env_link);
+  TAILQ_REMOVE(&env_sched_list, (env), env_sched_link);
 }
 
 /* Overview:
