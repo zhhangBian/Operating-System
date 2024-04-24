@@ -279,6 +279,10 @@ int env_alloc(struct Env **new, u_int parent_id) {
   // Reserve space for 'argc' and 'argv'.
   env->env_tf.regs[29] = USTACKTOP - sizeof(int) - sizeof(char **);
 
+	env->scheds=0;
+	env->runs=0;
+	env->clocks=0;
+
   // 如果上述操作都成功，则从空闲进程链表中移除该进程块
   LIST_REMOVE(env, env_link);
   *new = env;
@@ -583,4 +587,11 @@ void envid2env_check() {
   re = envid2env(pe2->env_id, &pe, 1);
   assert(re == -E_BAD_ENV);
   printk("envid2env() work well!\n");
+}
+
+void env_stat(struct Env *e, u_int *pri, u_int *scheds, u_int *runs, u_int *clocks) {
+	*pri=e->env_pri;
+	*scheds=e->scheds;
+	*runs=e->runs;
+	*clocks=e->clocks;
 }

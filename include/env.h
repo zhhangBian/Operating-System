@@ -60,6 +60,10 @@ struct Env {
 
   // Lab 6 scheduler counts
   u_int env_runs; // number of times we've been env_run'ed
+
+  u_int scheds;
+  u_int runs;
+  u_int clocks;
 };
 
 LIST_HEAD(Env_list, Env);
@@ -93,5 +97,7 @@ void envid2env_check(void);
     extern u_int binary_##name##_size; \
     env_create(binary_##name##_start, (u_int)binary_##name##_size, 1); \
   })
+
+void env_stat(struct Env *e, u_int *pri, u_int *scheds, u_int *runs, u_int *clocks);
 
 #endif // !_ENV_H_

@@ -25,6 +25,10 @@ void schedule(int yield) {
   static int count = 0;
   struct Env *env = curenv;
 
+  if(env!=NULL) {
+	  env->runs++;
+	env->clocks+=env->env_tf.cp0_count;	
+  }
   /* We always decrease the 'count' by 1.
    *
     * If 'yield' is set,
