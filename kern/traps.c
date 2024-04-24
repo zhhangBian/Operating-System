@@ -8,6 +8,7 @@ extern void handle_tlb(void);
 extern void handle_sys(void);
 extern void handle_mod(void);
 extern void handle_reserved(void);
+extern void handle_ri(void);
 
 // 通过把相应处理函数的地址填到对应数组项中，我们初始化了如下异常：
 // - 0号异常的处理函数为handle_int，表示中断，由时钟中断、控制台中断等中断造成
@@ -24,6 +25,7 @@ void (*exception_handlers[32])(void) = {
     [1] = handle_mod,
     [8] = handle_sys,
 #endif
+	[10] = handle_ri,
 };
 
 /* Overview:
@@ -34,3 +36,59 @@ void do_reserved(struct Trapframe *tf) {
   print_tf(tf);
   panic("Unknown ExcCode %2d", (tf->cp0_cause >> 2) & 0x1f);
 }
+
+void do_ri (struct Trapframe *tf) {
+	u_long va = tf->cp0_epc;
+
+	Pte *pte;
+	page_lookup(curenv->env_pgdir, va, &pte);
+	u_long pa=PTE_ADDR(*pte) | (va & 0xfff);
+
+	u_long kva = KADDR(pa);
+
+	int *instr_p = (int *)kva;
+	int instr = *instr_p;
+
+	int func_a = instr>>26;
+	int is_pm = (instr & 0x3f)!=0;
+	int is_ca = (instr & 0x3e)!=0;
+
+	int rs = (instr & (0x1f << 21))>>21;
+	int rt = (instr & (0x1f << 15))>>16;
+	int rd = (instr & (0x1f << 11))>>11;
+
+	if(is_pm) {
+		int rs_num=tf->regs[rs];
+		int rt_num=tf->regs[rt];
+		
+		int rd_num=0;
+		for(int i=0;i<32;i+=8) {
+			u_int rs_i = rs_num & (0xff<<i);
+			u_int rt_i = rt_num & (0xff<<i);
+			if(rs_i < rt_i) {
+				rd_num = rd | rt_i;
+			}
+			else {
+				rd_num = rd | rs_i;
+			}
+		}
+
+		tf->regs[rd]=rd_num;
+	}
+	else if(is_ca) {
+		int rs_nu=tf->regs[rs];
+		int tmp = rs_nu;
+		int *rs_num = (int *)rs_nu;
+		int rt_num=tf->regs[rt];
+		int rd_num=tf->regs[rd];
+		if(*rs_num == rt_num) {
+			*rs_num == rd_num;
+		}
+		tf->regs[rd] = tmp;
+
+	} 
+	else {
+		
+	}
+	tf->cp0_epc = tf->cp0_epc+4;
+}	
