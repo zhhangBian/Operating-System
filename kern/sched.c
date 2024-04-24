@@ -67,6 +67,7 @@ void schedule(int yield) {
     }
     // 不要在这里使用 TAILQ_REMOVE
     env = TAILQ_FIRST(&env_sched_list);
+	env->scheds++;
     // 将剩余时间片更新为新的进程的优先级
     count = env->env_pri;
   }
