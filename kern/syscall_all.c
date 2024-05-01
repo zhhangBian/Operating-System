@@ -541,5 +541,5 @@ void do_syscall(struct Trapframe *tf) {
   u_int arg5 = *(u_int *)(sp_address+20);
 
   // 将函数指针存入返回值 $v0
-  tf->regs[2] = func(arg1, arg2, arg3, arg4, arg5);
+  tf->regs[2] = syscall_func(arg1, arg2, arg3, arg4, arg5);
 }
