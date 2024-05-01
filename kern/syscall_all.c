@@ -177,8 +177,8 @@ int sys_mem_alloc(u_int envid, u_int virtual_address, u_int permission) {
  *   'envid2env', 'page_lookup', 'page_insert'
  */
 // 共享物理页面，将目标进程的虚拟地址  与  源进程块虚拟地址对应的物理页面  建立映射关系
-int sys_mem_map(u_int src_envid, u_int src_virtual_address, 
-                u_int dst_envid, u_int dst_virtual_address, 
+int sys_mem_map(u_int src_envid, u_int src_virtual_address,
+                u_int dst_envid, u_int dst_virtual_address,
                 u_int permission) {
   struct Env *src_env;
   struct Env *dst_env;
@@ -334,23 +334,23 @@ void sys_panic(char *msg) {
  *   Return 0 on success.
  *   Return -E_INVAL: 'dst_virtual_address' is neither 0 nor a legal address.
  */
+// 进程间通信接收信息
 int sys_ipc_recv(u_int dst_virtual_address) {
-  /* Step 1: Check if 'dst_virtual_address' is either zero or a legal address. */
+  // 检查地址是否合法
   if (dst_virtual_address != 0 && is_illegal_va(dst_virtual_address)) {
     return -E_INVAL;
   }
 
-  /* Step 2: Set 'curenv->env_ipc_recving' to 1. */
-  /* Exercise 4.8: Your code here. (1/8) */
+  // 进行通信前的准备工作：握手
+  // 表明该进程准备接受发送方的消息
+  curenv->env_ipc_recving = 1;
+  // 表明自己要将接受到的页面与dstva成映射
+  curenv->env_ipc_dstva= dst_virtual_address;
 
-  /* Step 3: Set the value of 'curenv->env_ipc_dst_virtual_address'. */
-  /* Exercise 4.8: Your code here. (2/8) */
-
-  /* Step 4: Set the status of 'curenv' to 'ENV_NOT_RUNNABLE' and remove it from
-   * 'env_sched_list'. */
-  /* Exercise 4.8: Your code here. (3/8) */
-
-  /* Step 5: Give up the CPU and block until a message is received. */
+  // 阻塞当前进程，等待对方进程发送数据
+  curenv->env_status = ENV_NOT_RUNNABLE;
+	TAILQ_REMOVE(&env_sched_list, curenv, env_sched_link);
+  // 强制切换进程，让对方进程发送数据，指导接受到信息
   ((struct Trapframe *)KSTACKTOP - 1)->regs[2] = 0;
   schedule(1);
 }
@@ -371,37 +371,52 @@ int sys_ipc_recv(u_int dst_virtual_address) {
  *   'sys_ipc_recv'.
  *   Return the original error when underlying calls fail.
  */
-int sys_ipc_try_send(u_int envid, u_int value, u_int src_virtual_address, u_int permission) {
-  struct Env *e;
-  struct Page *p;
+// 进程间通信发送信息
+int sys_ipc_try_send(u_int envid_receive, u_int value_send, u_int src_virtual_address, u_int permission) {
+  struct Env *env_receive;
+  struct Page *page_shared;
 
-  /* Step 1: Check if 'src_virtual_address' is either zero or a legal address. */
-  /* Exercise 4.8: Your code here. (4/8) */
+  // 检查地址是否合法
+  if (src_virtual_address != 0 && is_illegal_va(src_virtual_address)) {
+		return -E_INVAL;
+	}
 
-  /* Step 2: Convert 'envid' to 'struct Env *e'. */
   /* This is the only syscall where the 'envid2env' should be used with 'checkperm' UNSET,
    * because the target env is not restricted to 'curenv''s children. */
-  /* Exercise 4.8: Your code here. (5/8) */
+  // 获取**接受进程**的进程控制块
+  // 这里是唯一不查找父子关系的地方：发送是任意的
+  try(envid2env(envid_receive, &env_receive, 0));
 
-  /* Step 3: Check if the target is waiting for a message. */
-  /* Exercise 4.8: Your code here. (6/8) */
+  // 检查接收进程是否处于接收态
+  if (!env_receive->env_ipc_recving) {
+		return -E_IPC_NOT_RECV;
+	}
 
-  /* Step 4: Set the target's ipc fields. */
-  e->env_ipc_value = value;
-  e->env_ipc_from = curenv->env_id;
-  e->env_ipc_perm = PTE_V | permission;
-  e->env_ipc_recving = 0;
+  // 设置接收进程的相关属性
+  env_receive->env_ipc_value = value_send;
+  env_receive->env_ipc_from = curenv->env_id;
+  env_receive->env_ipc_perm = PTE_V | permission;
+  // 置0表示接受到信息
+  env_receive->env_ipc_recving = 0;
 
-  /* Step 5: Set the target's status to 'ENV_RUNNABLE' again and insert it to the tail of
-   * 'env_sched_list'. */
-  /* Exercise 4.8: Your code here. (7/8) */
+  // 接收到了信息，取消接收进程的阻塞状态
+  env_receive->env_status = ENV_RUNNABLE;
+	TAILQ_INSERT_TAIL(&env_sched_list, env_receive, env_sched_link);
 
-  /* Step 6: If 'src_virtual_address' is not zero, map the page at 'src_virtual_address' in 'curenv' to 'e->env_ipc_dst_virtual_address'
-   * in 'e'. */
-  /* Return -E_INVAL if 'src_virtual_address' is not zero and not mapped in 'curenv'. */
+  // 将当前进程的一个页面共享到接收进程。只有这样，接收进程才能通过该页面获得发送进程发送的一些信息。
+  // 如果为0表示只传值，不用共享页面
   if (src_virtual_address != 0) {
-    /* Exercise 4.8: Your code here. (8/8) */
-
+    // 获取当前进程虚拟地址对应的  物理页面控制块
+    page_shared = page_lookup(curenv->env_pgdir, src_virtual_address, NULL);
+		if (page_shared == NULL) {
+			return -E_INVAL;
+		}
+    // 在接受进程中建立映射关系
+		try(page_insert(env_receive->env_pgdir,
+                    env_receive->env_asid,
+                    page_shared,
+                    env_receive->env_ipc_dstva,
+                    permission));
   }
   return 0;
 }
@@ -475,28 +490,39 @@ int sys_read_dev(u_int va, u_int pa, u_int len) {
 // 系统调用函数列表
 // 通过函数指针获取其中的函数
 void *syscall_table[MAX_SYSNO] = {
-    [SYS_putchar] = sys_putchar,
-    [SYS_print_cons] = sys_print_cons,
-    [SYS_getenvid] = sys_getenvid,
-    // 实现用户进程对CPU 的放弃，从而调度其他的进程
-    [SYS_yield] = sys_yield,
-    [SYS_env_destroy] = sys_env_destroy,
+    [SYS_putchar]           = sys_putchar,
+    [SYS_print_cons]        = sys_print_cons,
+    [SYS_getenvid]          = sys_getenvid,
+
+    // 实现用户进程对CPU的放弃，强制切换进程，从而调度其他的进程
+    [SYS_yield]             = sys_yield,
+
+    [SYS_env_destroy]       = sys_env_destroy,
     [SYS_set_tlb_mod_entry] = sys_set_tlb_mod_entry,
+
     // 分配内存：给该程序所允许的虚拟内存空间显式地分配实际的物理内存
-    [SYS_mem_alloc] = sys_mem_alloc,
+    [SYS_mem_alloc]         = sys_mem_alloc,
+
     // 共享物理页面，将源进程和目标进程  的相应内存映射到相同的相应地址
-    [SYS_mem_map] = sys_mem_map,
+    [SYS_mem_map]           = sys_mem_map,
+
     // 解除映射关系
-    [SYS_mem_unmap] = sys_mem_unmap,
-    [SYS_exofork] = sys_exofork,
-    [SYS_set_env_status] = sys_set_env_status,
-    [SYS_set_trapframe] = sys_set_trapframe,
-    [SYS_panic] = sys_panic,
-    [SYS_ipc_try_send] = sys_ipc_try_send,
-    [SYS_ipc_recv] = sys_ipc_recv,
-    [SYS_cgetc] = sys_cgetc,
-    [SYS_write_dev] = sys_write_dev,
-    [SYS_read_dev] = sys_read_dev,
+    [SYS_mem_unmap]         = sys_mem_unmap,
+
+    [SYS_exofork]           = sys_exofork,
+    [SYS_set_env_status]    = sys_set_env_status,
+    [SYS_set_trapframe]     = sys_set_trapframe,
+    [SYS_panic]             = sys_panic,
+
+    // 进程间通信尝试发送信息
+    [SYS_ipc_try_send]      = sys_ipc_try_send,
+
+    // 进程间通信接受信息
+    [SYS_ipc_recv]          = sys_ipc_recv,
+
+    [SYS_cgetc]             = sys_cgetc,
+    [SYS_write_dev]         = sys_write_dev,
+    [SYS_read_dev]          = sys_read_dev,
 };
 
 /* Overview:

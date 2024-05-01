@@ -49,12 +49,26 @@ struct Env {
   // 进程优先级
   u_int env_pri;
 
-  // Lab 4 IPC
-  u_int env_ipc_value;   // the value sent to us
-  u_int env_ipc_from;    // envid of the sender
-  u_int env_ipc_recving; // whether this env is blocked receiving
-  u_int env_ipc_dstva;   // va at which the received page should be mapped
-  u_int env_ipc_perm;    // perm in which the received page should be mapped
+  // 用于进程间通信
+  // 所有的进程都共享同一个内核空间（主要为kseg0）
+  // 在不同空间之间交换数据，可以借助于内核空间来实现。
+  // 发送方进程可以将数据以系统调用的形式存放在进程控制块中
+  // 接收方进程同样以系统调用的方式在进程控制块中找到对应的数据，读取并返回。
+
+  // 进程传递的具体数值
+  // the value sent to us
+  u_int env_ipc_value;
+  // 发送方进程id
+  u_int env_ipc_from;
+  // whether this env is blocked receiving
+  // 1：等待接受数据中；0：不可接受数据
+  u_int env_ipc_recving;
+  // 接收到的页面需要与自身的哪个虚拟页面完成映射
+  // va at which the received page should be mapped
+  u_int env_ipc_dstva;
+  // 传递的页面的权限位设置
+  // perm in which the received page should be mapped
+  u_int env_ipc_perm;
 
   // Lab 4 fault handling
   u_int env_user_tlb_mod_entry; // userspace TLB Mod handler
