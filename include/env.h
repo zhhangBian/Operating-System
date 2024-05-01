@@ -9,6 +9,7 @@
 #define LOG2NENV 10
 // 进程块的数量
 #define NENV (1 << LOG2NENV)
+// 获取envid对应的进程控制块地址
 #define ENVX(envid) ((envid) & (NENV - 1))
 
 // All possible values of 'env_status' in 'struct Env'.

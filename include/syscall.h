@@ -3,6 +3,8 @@
 
 #ifndef __ASSEMBLER__
 
+// 系统调用号，用于代表相应的系统调用
+// 内核区分不同系统调用的唯一依据
 enum {
 	SYS_putchar,
 	SYS_print_cons,

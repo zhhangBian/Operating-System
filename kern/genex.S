@@ -17,6 +17,7 @@ FEXPORT(ret_from_exception)
   RESTORE_ALL
   eret
 
+# 处理中断的程序
 # 通过.text.exc_gen_entry代码段的分发，最终调用handle_int函数进行处理
 NESTED(handle_int, TF_SIZE, zero)
   # 保存相应的中断信息
@@ -35,6 +36,7 @@ END(handle_int)
 
 BUILD_HANDLER tlb do_tlb_refill
 
+# 通过这里的handle_sys，是对do_syscall函数的一个封装
 #if !defined(LAB) || LAB >= 4
 BUILD_HANDLER mod do_tlb_mod
 BUILD_HANDLER sys do_syscall

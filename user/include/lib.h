@@ -30,13 +30,13 @@ void _user_halt(const char *, int, const char *, ...) __attribute__((noreturn));
 #define user_halt(...) _user_halt(__FILE__, __LINE__, __VA_ARGS__)
 
 #undef panic_on
-#define panic_on(expr)                                                                             \
-	do {                                                                                       \
-		int r = (expr);                                                                    \
-		if (r != 0) {                                                                      \
-			user_panic("'" #expr "' returned %d", r);                                  \
-		}                                                                                  \
-	} while (0)
+#define panic_on(expr) \
+  do { \
+    int r = (expr); \
+    if (r != 0) { \
+      user_panic("'" #expr "' returned %d", r); \
+    } \
+  } while (0)
 
 /// fork, spawn
 int spawn(char *prog, char **argv);
@@ -57,7 +57,7 @@ int syscall_mem_map(u_int srcid, void *srcva, u_int dstid, void *dstva, u_int pe
 int syscall_mem_unmap(u_int envid, void *va);
 
 __attribute__((always_inline)) inline static int syscall_exofork(void) {
-	return msyscall(SYS_exofork, 0, 0, 0, 0, 0);
+  return msyscall(SYS_exofork, 0, 0, 0, 0, 0);
 }
 
 int syscall_set_env_status(u_int envid, u_int status);
@@ -119,11 +119,11 @@ int remove(const char *path);
 int ftruncate(int fd, u_int size);
 int sync(void);
 
-#define user_assert(x)                                                                             \
-	do {                                                                                       \
-		if (!(x))                                                                          \
-			user_panic("assertion failed: %s", #x);                                    \
-	} while (0)
+#define user_assert(x) \
+  do { \
+    if (!(x)) \
+      user_panic("assertion failed: %s", #x); \
+  } while (0)
 
 // File open modes
 #define O_RDONLY 0x0000	 /* open for reading only */

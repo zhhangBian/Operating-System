@@ -89,48 +89,56 @@ static void map_segment(Pde *pde_base,            // 需要写入映射关系的
  *  return e's envid on success
  */
 // 获取env对应的id，具有唯一性
-u_int mkenvid(struct Env *e) {
+u_int mkenvid(struct Env *env) {
   static u_int i = 0;
-  return ((++i) << (1 + LOG2NENV)) | (e - envs);
+  return ((++i) << (1 + LOG2NENV)) | (env - envs);
 }
 
 /* Overview:
  *   Convert an existing 'envid' to an 'struct Env *'.
- *   If 'envid' is 0, set '*penv = curenv', otherwise set '*penv = &envs[ENVX(envid)]'.
- *   In addition, if 'checkperm' is non-zero, the requested env must be either 'curenv' or its
+ *   If 'envid' is 0, set '*env_wanted = curenv', otherwise set '*env_wanted = &envs[ENVX(envid)]'.
+ *   In addition, if 'check_if_parent' is non-zero, the requested env must be either 'curenv' or its
  *   immediate child.
  *
  * Pre-Condition:
- *   'penv' points to a valid 'struct Env *'.
+ *   'env_wanted' points to a valid 'struct Env *'.
  *
  * Post-Condition:
- *   return 0 on success, and set '*penv' to the env.
- *   return -E_BAD_ENV on error (invalid 'envid' or 'checkperm' violated).
+ *   return 0 on success, and set '*env_wanted' to the env.
+ *   return -E_BAD_ENV on error (invalid 'envid' or 'check_if_parent' violated).
  */
-int envid2env(u_int envid, struct Env **penv, int checkperm) {
-  struct Env *e;
+// 通过调用envid获得对应的进程控制块
+int envid2env(u_int envid, struct Env **env_wanted, int check_if_parent) {
+  struct Env *env;
 
-  /* Step 1: Assign value to 'e' using 'envid'. */
-  /* Hint:
-   *   If envid is zero, set 'penv' to 'curenv' and return 0.
-   *   You may want to use 'ENVX'.
-   */
-  /* Exercise 4.3: Your code here. (1/2) */
+  // 分配envid时不会为0，用0代表直接获取当前的进程块
+  if (envid == 0) {
+		*env_wanted = curenv;
+		return 0;
+	} 
+  // 若不为0，则返回envid对应的进程块
+  else {
+    // envid低10位是数组的索引
+		env = envs + ENVX(envid);
+	}
 
-  if (e->env_status == ENV_FREE || e->env_id != envid) {
-    return -E_BAD_ENV;
-  }
+  if (env->env_status == ENV_FREE ||  // 进程被回收
+      env->env_id != envid            // 进程已经被销毁，不应该再被使用
+  ) { return -E_BAD_ENV; }
 
-  /* Step 2: Check when 'checkperm' is non-zero. */
+  /* Step 2: Check when 'check_if_parent' is non-zero. */
   /* Hints:
    *   Check whether the calling env has sufficient permissions to manipulate the
    *   specified env, i.e. 'e' is either 'curenv' or its immediate child.
    *   If violated, return '-E_BAD_ENV'.
    */
-  /* Exercise 4.3: Your code here. (2/2) */
+  if (check_if_parent && // 是否需要检查和 curenv有亲缘关系
+      env->env_id != curenv->env_id  &&     // 和curenv不是同一个进程块
+      env->env_parent_id != curenv->env_id  // 不是curenv的子进程
+      // 对于一些操作，只有父进程对子进程具有权限
+  ) { return -E_BAD_ENV; }
 
-  /* Step 3: Assign 'e' to '*penv'. */
-  *penv = e;
+  *env_wanted = env;
   return 0;
 }
 

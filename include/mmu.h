@@ -94,6 +94,11 @@
  * Part 2.  Our conventions.
  */
 
+// 用户空间包括kuseg
+// 用户空间每个进程都有单独的页表
+// 内核空间为kseg0和kseg1
+// 内核空间则直接映射到固定的物理页1以及外部硬件设备。
+
 /*
  o     4G ----------->  +----------------------------+------------0x100000000
  o                      |       ...                  |  kseg2
@@ -151,6 +156,7 @@
 // 用户空间的Envs数组对应的虚拟地址起始处
 #define UENVS (UPAGES - PDMAP)
 
+// 用户空间能使用的最高虚拟地址
 #define UTOP UENVS
 #define UXSTACKTOP UTOP
 
