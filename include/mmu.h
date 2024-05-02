@@ -69,6 +69,7 @@
 // Dirty bit, but really a write-enable bit. 1 to allow writes, 0 and any store using this
 // translation will cause a tlb mod exception (TLB Mod).
 // 可写位，若某页表项的可写位为1，则允许经由该页表项对物理页进行写操作。
+// 用于实现写时复制，当父子进程同时写不可写页面时，触发中断，由内核程序执行页面的真复制
 #define PTE_D (0x0004 << PTE_HARDFLAG_SHIFT)
 
 // Cache Coherency Attributes bit.
@@ -78,6 +79,8 @@
 
 // Copy On Write. Reserved for software, used by fork.
 // 写时复制位，用于实现fork 的写时复制机制。
+// 是TLB中的软件保留位
+// COW: copy on write
 #define PTE_COW 0x0001
 
 // Shared memmory. Reserved for software, used by fork.
@@ -158,6 +161,7 @@
 
 // 用户空间能使用的最高虚拟地址
 #define UTOP UENVS
+// 异常处理栈栈地址
 #define UXSTACKTOP UTOP
 
 #define USTACKTOP (UTOP - 2 * PTMAP)

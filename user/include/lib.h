@@ -8,7 +8,9 @@
 #include <syscall.h>
 #include <trap.h>
 
+// 获取页表的起始地址
 #define vpt ((const volatile Pte *)UVPT)
+// 获取页目录的起始地址
 #define vpd ((const volatile Pde *)(UVPT + (PDX(UVPT) << PGSHIFT)))
 #define envs ((const volatile struct Env *)UENVS)
 #define pages ((const volatile struct Page *)UPAGES)
@@ -56,6 +58,8 @@ int syscall_mem_alloc(u_int envid, void *va, u_int perm);
 int syscall_mem_map(u_int srcid, void *srcva, u_int dstid, void *dstva, u_int perm);
 int syscall_mem_unmap(u_int envid, void *va);
 
+// 创建新进程：在内核级
+// 设置为内联函数，不会被编译为一个函数，而是直接内联展开在fork函数内，不会修改栈帧
 __attribute__((always_inline)) inline static int syscall_exofork(void) {
   return msyscall(SYS_exofork, 0, 0, 0, 0, 0);
 }

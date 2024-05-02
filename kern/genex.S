@@ -36,9 +36,10 @@ END(handle_int)
 
 BUILD_HANDLER tlb do_tlb_refill
 
-# 通过这里的handle_sys，是对do_syscall函数的一个封装
 #if !defined(LAB) || LAB >= 4
+# 处理页写入异常的内核函数
 BUILD_HANDLER mod do_tlb_mod
+# 这里的handle_sys，是对do_syscall函数的一个封装
 BUILD_HANDLER sys do_syscall
 #endif
 

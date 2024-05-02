@@ -70,8 +70,9 @@ struct Env {
   // perm in which the received page should be mapped
   u_int env_ipc_perm;
 
-  // Lab 4 fault handling
-  u_int env_user_tlb_mod_entry; // userspace TLB Mod handler
+  // 存储用户异常处理函数的地址
+  // userspace TLB Mod handler
+  u_int env_user_tlb_mod_entry;
 
   // Lab 6 scheduler counts
   u_int env_runs; // number of times we've been env_run'ed

@@ -42,6 +42,7 @@ int sys_print_cons(const void *s, u_int num) {
  * Post-Condition:
  * 	return the current environment id
  */
+// 返回当前进程的envid
 u_int sys_getenvid(void) {
   return curenv->env_id;
 }
@@ -91,14 +92,13 @@ int sys_env_destroy(u_int envid) {
  *   Returns 0 on success.
  *   Returns the original error if underlying calls fail.
  */
+// 注册进程自身的页写入异常处理函数
 int sys_set_tlb_mod_entry(u_int envid, u_int func) {
   struct Env *env;
-
-  /* Step 1: Convert the envid to its corresponding 'struct Env *' using 'envid2env'. */
-  /* Exercise 4.12: Your code here. (1/2) */
-
-  /* Step 2: Set its 'env_user_tlb_mod_entry' to 'func'. */
-  /* Exercise 4.12: Your code here. (2/2) */
+  // 获取进程控制块
+  try(envid2env(envid, &env, 1));
+  // 设置异常处理函数
+  env->env_user_tlb_mod_entry = func;
 
   return 0;
 }
@@ -186,8 +186,8 @@ int sys_mem_map(u_int src_envid, u_int src_virtual_address,
 
   // 判断虚拟地址是否位于用户空间
   if (is_illegal_va(src_virtual_address) || is_illegal_va(dst_virtual_address)) {
-		return -E_INVAL;
-	}
+    return -E_INVAL;
+  }
 
   // 获取源进程块和目标进程块
   try(envid2env(src_envid, &src_env, 1));
@@ -195,8 +195,8 @@ int sys_mem_map(u_int src_envid, u_int src_virtual_address,
 
   // 获取源进程虚拟地址对应的物理内存控制块
   if ((page_pointer = page_lookup(src_env->env_pgdir, src_virtual_address, NULL)) == NULL) {
-		return -E_INVAL;
-	}
+    return -E_INVAL;
+  }
 
   // 将目标进程块对应的虚拟地址  与  源对应的物理页面  建立映射关系
   return page_insert(dst_env->env_pgdir, dst_env->env_asid, page_pointer, dst_virtual_address, permission);
@@ -217,8 +217,8 @@ int sys_mem_unmap(u_int envid, u_int virtual_address) {
   struct Env *env;
   // 判断虚拟地址是否合法
   if (is_illegal_va(virtual_address)) {
-		return -E_INVAL;
-	}
+    return -E_INVAL;
+  }
 
   // 获取对应的进程控制块
   try(envid2env(envid, &env, 1));
@@ -242,22 +242,22 @@ int sys_mem_unmap(u_int envid, u_int virtual_address) {
  * Hint:
  *   This syscall works as an essential step in user-space 'fork' and 'spawn'.
  */
+// 实现fork函数
 int sys_exofork(void) {
-  struct Env *e;
+  struct Env *env;
+  // 初始化一个新的进程控制块
+  try(env_alloc(&env, curenv->env_id));
 
-  /* Step 1: Allocate a new env using 'env_alloc'. */
-  /* Exercise 4.9: Your code here. (1/4) */
+  // 复制父进程调用系统操作时的现场
+  env->env_tf = *((struct Trapframe *)KSTACKTOP - 1);
 
-  /* Step 2: Copy the current Trapframe below 'KSTACKTOP' to the new env's 'env_tf'. */
-  /* Exercise 4.9: Your code here. (2/4) */
+  // 将返回值（子进程envid）设置为0：这里是在初始化子进程
+  env->env_tf.regs[2] = 0;
+  // 设置为不可调度
+  env->env_status = ENV_NOT_RUNNABLE;
+  env->env_pri = curenv->env_pri;
 
-  /* Step 3: Set the new env's 'env_tf.regs[2]' to 0 to indicate the return value in child. */
-  /* Exercise 4.9: Your code here. (3/4) */
-
-  /* Step 4: Set up the new env's 'env_status' and 'env_pri'.  */
-  /* Exercise 4.9: Your code here. (4/4) */
-
-  return e->env_id;
+  return env->env_id;
 }
 
 /* Overview:
@@ -272,19 +272,27 @@ int sys_exofork(void) {
  *   The invariant that 'env_sched_list' contains and only contains all runnable envs should be
  *   maintained.
  */
+// 根据设定的状态将进程加入或移除调度队列
 int sys_set_env_status(u_int envid, u_int status) {
   struct Env *env;
 
-  /* Step 1: Check if 'status' is valid. */
-  /* Exercise 4.14: Your code here. (1/3) */
+  // 检查进程状态是否有效
+  if (status != ENV_RUNNABLE && status != ENV_NOT_RUNNABLE) {
+    return -E_INVAL;
+  }
 
-  /* Step 2: Convert the envid to its corresponding 'struct Env *' using 'envid2env'. */
-  /* Exercise 4.14: Your code here. (2/3) */
+  // 获取进程控制块
+  try(envid2env(envid, &env, 1));
 
-  /* Step 3: Update 'env_sched_list' if the 'env_status' of 'env' is being changed. */
-  /* Exercise 4.14: Your code here. (3/3) */
-
-  /* Step 4: Set the 'env_status' of 'env'. */
+  // 设置进程的状态
+  if(env->env_status != ENV_NOT_RUNNABLE) {
+    if(status == ENV_NOT_RUNNABLE) {
+      TAILQ_REMOVE(&env_sched_list, env, env_sched_link);
+    }
+    else if(status == ENV_RUNNABLE) {
+      TAILQ_INSERT_TAIL(&env_sched_list, env, env_sched_link);
+    }
+  }
   env->env_status = status;
   return 0;
 }
@@ -349,7 +357,7 @@ int sys_ipc_recv(u_int dst_virtual_address) {
 
   // 阻塞当前进程，等待对方进程发送数据
   curenv->env_status = ENV_NOT_RUNNABLE;
-	TAILQ_REMOVE(&env_sched_list, curenv, env_sched_link);
+  TAILQ_REMOVE(&env_sched_list, curenv, env_sched_link);
   // 强制切换进程，让对方进程发送数据，指导接受到信息
   ((struct Trapframe *)KSTACKTOP - 1)->regs[2] = 0;
   schedule(1);
@@ -378,8 +386,8 @@ int sys_ipc_try_send(u_int envid_receive, u_int value_send, u_int src_virtual_ad
 
   // 检查地址是否合法
   if (src_virtual_address != 0 && is_illegal_va(src_virtual_address)) {
-		return -E_INVAL;
-	}
+    return -E_INVAL;
+  }
 
   /* This is the only syscall where the 'envid2env' should be used with 'checkperm' UNSET,
    * because the target env is not restricted to 'curenv''s children. */
@@ -389,8 +397,8 @@ int sys_ipc_try_send(u_int envid_receive, u_int value_send, u_int src_virtual_ad
 
   // 检查接收进程是否处于接收态
   if (!env_receive->env_ipc_recving) {
-		return -E_IPC_NOT_RECV;
-	}
+    return -E_IPC_NOT_RECV;
+  }
 
   // 设置接收进程的相关属性
   env_receive->env_ipc_value = value_send;
@@ -401,18 +409,18 @@ int sys_ipc_try_send(u_int envid_receive, u_int value_send, u_int src_virtual_ad
 
   // 接收到了信息，取消接收进程的阻塞状态
   env_receive->env_status = ENV_RUNNABLE;
-	TAILQ_INSERT_TAIL(&env_sched_list, env_receive, env_sched_link);
+  TAILQ_INSERT_TAIL(&env_sched_list, env_receive, env_sched_link);
 
   // 将当前进程的一个页面共享到接收进程。只有这样，接收进程才能通过该页面获得发送进程发送的一些信息。
   // 如果为0表示只传值，不用共享页面
   if (src_virtual_address != 0) {
     // 获取当前进程虚拟地址对应的  物理页面控制块
     page_shared = page_lookup(curenv->env_pgdir, src_virtual_address, NULL);
-		if (page_shared == NULL) {
-			return -E_INVAL;
-		}
+    if (page_shared == NULL) {
+      return -E_INVAL;
+    }
     // 在接受进程中建立映射关系
-		try(page_insert(env_receive->env_pgdir,
+    try(page_insert(env_receive->env_pgdir,
                     env_receive->env_asid,
                     page_shared,
                     env_receive->env_ipc_dstva,
@@ -492,12 +500,16 @@ int sys_read_dev(u_int va, u_int pa, u_int len) {
 void *syscall_table[MAX_SYSNO] = {
     [SYS_putchar]           = sys_putchar,
     [SYS_print_cons]        = sys_print_cons,
+
+    // 返回当前进程的envid
     [SYS_getenvid]          = sys_getenvid,
 
     // 实现用户进程对CPU的放弃，强制切换进程，从而调度其他的进程
     [SYS_yield]             = sys_yield,
 
     [SYS_env_destroy]       = sys_env_destroy,
+
+    // 注册进程自身的页写入异常处理函数
     [SYS_set_tlb_mod_entry] = sys_set_tlb_mod_entry,
 
     // 分配内存：给该程序所允许的虚拟内存空间显式地分配实际的物理内存
@@ -509,7 +521,10 @@ void *syscall_table[MAX_SYSNO] = {
     // 解除映射关系
     [SYS_mem_unmap]         = sys_mem_unmap,
 
+    // 创建子进程：实现fork()
     [SYS_exofork]           = sys_exofork,
+
+    // 根据设定的状态将进程加入或移除调度队列
     [SYS_set_env_status]    = sys_set_env_status,
     [SYS_set_trapframe]     = sys_set_trapframe,
     [SYS_panic]             = sys_panic,
