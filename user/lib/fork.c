@@ -29,7 +29,7 @@ static void __attribute__((noreturn)) cow_entry(struct Trapframe *tf) {
 
   // 在UCOW获取新物理页面，分配内存
   // 因为处于用户程序中，所以不能使用page_alloc，而需要使用系统调用
-  syscall_mem_alloc(0, (void *)UCOW, perm);
+  syscall_mem_alloc(0, (void *)UCOW, permission);
 
   // 拷贝数据
   // va是随意的地址，不一定对其，要手动对其
