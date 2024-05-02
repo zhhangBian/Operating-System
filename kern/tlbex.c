@@ -95,8 +95,6 @@ void do_tlb_mod(struct Trapframe *tf) {
   // 将当前现场保存在异常处理栈中
   *(struct Trapframe *)tf->regs[29] = error_handle_tf;
 
-  Pte *pte;
-  page_lookup(cur_pgdir, tf->cp0_badvaddr, &pte);
   if (curenv->env_user_tlb_mod_entry) {
     // 设定a0寄存器的值为trap frame所在的地址
     tf->regs[4] = tf->regs[29];

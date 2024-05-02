@@ -285,14 +285,13 @@ int sys_set_env_status(u_int envid, u_int status) {
   try(envid2env(envid, &env, 1));
 
   // 设置进程的状态
-  if(env->env_status != ENV_NOT_RUNNABLE) {
-    if(status == ENV_NOT_RUNNABLE) {
-      TAILQ_REMOVE(&env_sched_list, env, env_sched_link);
-    }
-    else if(status == ENV_RUNNABLE) {
-      TAILQ_INSERT_TAIL(&env_sched_list, env, env_sched_link);
-    }
+  if (env->env_status != ENV_NOT_RUNNABLE && status == ENV_NOT_RUNNABLE) {
+    TAILQ_REMOVE(&env_sched_list, env, env_sched_link);
   }
+  else if (env->env_status != ENV_RUNNABLE && status == ENV_RUNNABLE) {
+    TAILQ_INSERT_TAIL(&env_sched_list, env, env_sched_link);
+  }
+
   env->env_status = status;
   return 0;
 }
