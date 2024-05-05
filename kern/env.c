@@ -107,7 +107,8 @@ u_int mkenvid(struct Env *env) {
  *   return 0 on success, and set '*env_wanted' to the env.
  *   return -E_BAD_ENV on error (invalid 'envid' or 'check_if_parent' violated).
  */
-// 通过调用envid获得对应的进程控制块
+// 通过调用envid获得对应的进程控制块，并检查和当前进程是否是父子关系
+// envid为0代表直接获取当前进程块
 int envid2env(u_int envid, struct Env **env_wanted, int check_if_parent) {
   struct Env *env;
 
@@ -116,26 +117,19 @@ int envid2env(u_int envid, struct Env **env_wanted, int check_if_parent) {
 		*env_wanted = curenv;
 		return 0;
 	} 
-  // 若不为0，则返回envid对应的进程块
-  else {
-    // envid低10位是数组的索引
-		env = envs + ENVX(envid);
-	}
+  
+  // 获取进程控制块，envid低10位是数组的索引
+	env = envs + ENVX(envid);
 
+  // 检查当前进程是否可以被使用
   if (env->env_status == ENV_FREE ||  // 进程被回收
       env->env_id != envid            // 进程已经被销毁，不应该再被使用
   ) { return -E_BAD_ENV; }
 
-  /* Step 2: Check when 'check_if_parent' is non-zero. */
-  /* Hints:
-   *   Check whether the calling env has sufficient permissions to manipulate the
-   *   specified env, i.e. 'e' is either 'curenv' or its immediate child.
-   *   If violated, return '-E_BAD_ENV'.
-   */
+  // 检查父子的关系的目的是为了检查需要的进程是否有足够的权限对当前进程进行一些操作
   if (check_if_parent && // 是否需要检查和 curenv有亲缘关系
       env->env_id != curenv->env_id  &&     // 和curenv不是同一个进程块
       env->env_parent_id != curenv->env_id  // 不是curenv的子进程
-      // 对于一些操作，只有父进程对子进程具有权限
   ) { return -E_BAD_ENV; }
 
   *env_wanted = env;

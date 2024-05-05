@@ -39,7 +39,8 @@ BUILD_HANDLER tlb do_tlb_refill
 #if !defined(LAB) || LAB >= 4
 # 处理页写入异常的内核函数
 BUILD_HANDLER mod do_tlb_mod
-# 这里的handle_sys，是对do_syscall函数的一个封装
+# 经过异常分发后，通过handle_sys，完成系统调用
+# 参数为栈帧
 BUILD_HANDLER sys do_syscall
 #endif
 

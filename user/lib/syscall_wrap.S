@@ -1,10 +1,10 @@
 #include <asm/asm.h>
 
+# 调用msyscall后，通过syscall陷入内核态，通过异常分发完成系统调用
 # 参数由上层的程序进行填入，这里只需要调用syscall
 LEAF(msyscall)
-	// Just use 'syscall' instruction and return.
-	/* Exercise 4.1: Your code here. */
+  # 调用syscall陷入内核态
   syscall
+  # 完成系统调用后返回
   jr    ra
-
 END(msyscall)

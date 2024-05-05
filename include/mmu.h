@@ -198,6 +198,7 @@ typedef u_long Pte;
 
 // translates from physical address to kernel virtual address
 // 将物理地址转化为在kseg0中的虚拟地址
+// 为什么能直接转换：kseg0区中的地址在所有页表中都相同，为内核态保留
 #define KADDR(kseg0_physical_address)\
   ({\
     u_long _ppn = PPN(kseg0_physical_address);\

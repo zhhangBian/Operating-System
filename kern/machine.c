@@ -11,12 +11,11 @@
  *   'ch' is the character to be sent.
  */
 void printcharc(char ch) {
-	if (ch == '\n') {
-		printcharc('\r');
-	}
-	while (!(*((volatile uint8_t *)(KSEG1 + MALTA_SERIAL_LSR)) & MALTA_SERIAL_THR_EMPTY)) {
-	}
-	*((volatile uint8_t *)(KSEG1 + MALTA_SERIAL_DATA)) = ch;
+  if (ch == '\n') {
+    printcharc('\r');
+  }
+  while (!(*((volatile uint8_t *)(KSEG1 + MALTA_SERIAL_LSR)) & MALTA_SERIAL_THR_EMPTY)) {}
+  *((volatile uint8_t *)(KSEG1 + MALTA_SERIAL_DATA)) = ch;
 }
 /* End of Key Code "printcharc" */
 
@@ -28,10 +27,10 @@ void printcharc(char ch) {
  *   Otherwise, i.e. there's no input data available, 0 is returned immediately.
  */
 int scancharc(void) {
-	if (*((volatile uint8_t *)(KSEG1 + MALTA_SERIAL_LSR)) & MALTA_SERIAL_DATA_READY) {
-		return *((volatile uint8_t *)(KSEG1 + MALTA_SERIAL_DATA));
-	}
-	return 0;
+  if (*((volatile uint8_t *)(KSEG1 + MALTA_SERIAL_LSR)) & MALTA_SERIAL_DATA_READY) {
+    return *((volatile uint8_t *)(KSEG1 + MALTA_SERIAL_DATA));
+  }
+  return 0;
 }
 
 /* Overview:
@@ -44,8 +43,8 @@ int scancharc(void) {
  *   infinite loop.
  */
 void halt(void) {
-	*(volatile uint8_t *)(KSEG1 + MALTA_FPGA_HALT) = 0x42;
-	printk("machine.c:\thalt is not supported in this machine!\n");
-	while (1) {
-	}
+  *(volatile uint8_t *)(KSEG1 + MALTA_FPGA_HALT) = 0x42;
+  printk("machine.c:\thalt is not supported in this machine!\n");
+  while (1) {
+  }
 }

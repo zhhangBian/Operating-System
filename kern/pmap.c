@@ -331,19 +331,17 @@ void page_decref(struct Page *pp) {
 void page_remove(Pde *pgdir, u_int asid, u_long virtual_address) {
   Pte *pte;
 
-  /* Step 1: Get the page table entry, and check if the page table entry is valid. */
   // 查找虚拟地址对应的 二级页表 和 页控制块
   struct Page *page_pointer = page_lookup(pgdir, virtual_address, &pte);
   if (page_pointer == NULL) {
     return;
   }
 
-  // 删除页表映射：从原有虚拟地址变为0
+  // 删除页表映射：将页控制块映射的地址从原有虚拟地址变为0
   *pte = 0;
   /* Step 2: Decrease reference count on 'pp'. */
   page_decref(page_pointer);
 
-  /* Step 3: Flush TLB. */
   // 因为对页表进行了修改，需要调用 tlb_invalidate 确保 TLB 中不保留原有内容。
   tlb_invalidate(asid, virtual_address);
   return;

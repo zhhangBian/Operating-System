@@ -56,26 +56,23 @@ struct Env {
   // 接收方进程同样以系统调用的方式在进程控制块中找到对应的数据，读取并返回。
 
   // 进程传递的具体数值
-  // the value sent to us
   u_int env_ipc_value;
   // 发送方进程id
   u_int env_ipc_from;
-  // whether this env is blocked receiving
-  // 1：等待接受数据中；0：不可接受数据
+  // 握手信号：1：等待接受数据中；0：不可接受数据
   u_int env_ipc_recving;
   // 接收到的页面需要与自身的哪个虚拟页面完成映射
-  // va at which the received page should be mapped
   u_int env_ipc_dstva;
-  // 传递的页面的权限位设置
-  // perm in which the received page should be mapped
+  // 接受的页面的权限位设置
   u_int env_ipc_perm;
 
-  // 存储用户异常处理函数的地址
-  // userspace TLB Mod handler
+  // 存储用户态 TLB Mod异常的处理函数的地址
+  // mod: modify，写入异常，对应写入不可写页面时产生该异常
   u_int env_user_tlb_mod_entry;
 
   // Lab 6 scheduler counts
-  u_int env_runs; // number of times we've been env_run'ed
+  // number of times we've been env_run'ed
+  u_int env_runs;
 };
 
 LIST_HEAD(Env_list, Env);
@@ -96,6 +93,7 @@ void env_check(void);
 void envid2env_check(void);
 
 // 使用宏拼接指令，在C中较难以函数方法实现
+// 创建一个控制块，并指定优先级
 #define ENV_CREATE_PRIORITY(name, priority) \
   ({ \
     extern u_char binary_##name##_start[]; \
@@ -103,6 +101,7 @@ void envid2env_check(void);
     env_create(binary_##name##_start, (u_int)binary_##name##_size, priority); \
   })
 
+// 创建一个控制块，但不指定优先级，默认为1
 #define ENV_CREATE(name) \
   ({ \
     extern u_char binary_##name##_start[]; \
