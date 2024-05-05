@@ -65,12 +65,12 @@ void syscall_panic(const char *msg) {
   user_panic("SYS_panic returned %d", r);
 }
 
-int syscall_ipc_try_send(u_int envid, u_int value, const void *srcva, u_int perm) {
-  return msyscall(SYS_ipc_try_send, envid, value, srcva, perm);
+int syscall_ipc_try_send(u_int envid, u_int value, const void *src_va, u_int perm) {
+  return msyscall(SYS_ipc_try_send, envid, value, src_va, perm);
 }
 
-int syscall_ipc_recv(void *dstva) {
-  return msyscall(SYS_ipc_recv, dstva);
+int syscall_ipc_recv(void *dst_va) {
+  return msyscall(SYS_ipc_recv, dst_va);
 }
 
 int syscall_cgetc() {

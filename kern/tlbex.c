@@ -84,23 +84,30 @@ void _do_tlb_refill(u_long *pentrylo, u_int virtual_address, u_int asid) {
 void do_tlb_mod(struct Trapframe *tf) {
   // 不能直接使用正常情况下的用户栈的：发生页写入异常的也可能是正常栈的页面
   // 使用**异常处理栈**：栈顶对应的是内存布局中的 UXSTACKTOP
-  struct Trapframe error_handle_tf = *tf;
+  
+  // 保存原先的栈帧
+  struct Trapframe former_tf = *tf;
+
   // 设置栈帧的栈地址为异常处理栈
   // 对于栈指针已经在异常栈中的情况，就不再从异常栈顶开始
   if (tf->regs[29] < USTACKTOP || tf->regs[29] >= UXSTACKTOP) {
     tf->regs[29] = UXSTACKTOP;
   }
+  
   // 在用户异常栈底分配一块空间，用于存储trap frame
+  // 当前异常处理函数执行的栈
   tf->regs[29] -= sizeof(struct Trapframe);
-  // 将当前现场保存在异常处理栈中
-  *(struct Trapframe *)tf->regs[29] = error_handle_tf;
+  // 保存原先的栈帧
+  *(struct Trapframe *)tf->regs[29] = former_tf;
 
+  // 如果已经设定了异常处理函数
   if (curenv->env_user_tlb_mod_entry) {
-    // 设定a0寄存器的值为trap frame所在的地址
+    // 设定a0寄存器的值为原先的栈帧所在的地址，当返回后可以作为返回值被调用
+    // 具体逻辑见entry.S
     tf->regs[4] = tf->regs[29];
     // 留出第一个参数的空间
     tf->regs[29] -= sizeof(tf->regs[4]);
-    // 取出进程自身的处理函数所在地址
+    // 取出进程的处理函数，跳转回epc后执行处理函数
     tf->cp0_epc = curenv->env_user_tlb_mod_entry;
   } else {
     panic("TLB Mod but no user handler registered");

@@ -14,7 +14,8 @@
  *    the faulting page at the same address.
  */
 // 是写时复制的异常处理函数
-static void __attribute__((noreturn)) cow_entry(struct Trapframe *tf) {
+static void /*不返回函数*/__attribute__((noreturn)) cow_entry(struct Trapframe *tf) {
+  // 获取出现异常（即写写时复制的页面）时的虚拟地址
   u_int virtual_address = tf->cp0_badvaddr;
   u_int permission;
 
@@ -24,24 +25,22 @@ static void __attribute__((noreturn)) cow_entry(struct Trapframe *tf) {
   if (!(permission & PTE_COW)) {
     user_panic("perm doesn't have PTE_COW");
   }
-  // 移除PTE_COW权限，设置为PTE_D可写权限
+  // 由于将原先共享内容复制到了别的地方，不再共享，移除PTE_COW权限，设置为PTE_D可写权限
   permission = (permission & ~PTE_COW) | PTE_D;
 
-  // 在UCOW获取新物理页面，分配内存
+  // 获得数据拷贝的也控制块，将UCOW作为临时中转的虚拟地址供分配内存
   // 因为处于用户程序中，所以不能使用page_alloc，而需要使用系统调用
   syscall_mem_alloc(0, (void *)UCOW, permission);
-
-  // 拷贝数据
-  // va是随意的地址，不一定对其，要手动对其
+  // 拷贝数据，把va的数据拷贝到UCOW，作为中转的虚拟地址，va不一定对其，要手动对其
   memcpy((void *)UCOW, (void *)ROUNDDOWN(virtual_address, PAGE_SIZE), PAGE_SIZE);
-
-  // 将发生页写入异常的地址va 映射到临时页面上，并设置相关权限
+  // 将发生页写入异常的地址va映射到物理页面上，并设置相关权限
   syscall_mem_map(0, (void *)UCOW, 0, (void *)virtual_address, permission);
-
-  // 解除临时地址UCOW 的内存映射
+  // 解除临时地址UCOW的内存映射，释放UCOW的虚拟地址
   syscall_mem_unmap(0, (void *)UCOW);
 
-  // Step 7: Return to the faulting routine.
+  // 在异常处理完成后恢复现场，现在位于用户态，使用系统调用恢复现场
+  // 当从该系统调用返回时，将返回设置的栈帧中epc的位置。
+  // 对于cow_entry来说，意味着恢复到产生TLB Mod时的现场。
   int func_info = syscall_set_trapframe(0, tf);
   user_panic("syscall_set_trapframe returned %d", func_info);
 }
@@ -76,30 +75,30 @@ static void __attribute__((noreturn)) cow_entry(struct Trapframe *tf) {
 //   这类页面需要保持共享可写的状态，即在父子进程中映射到相同的物理页，使对其进行修改的结果相互可见。
 // - 可写页面：即具有PTE_D权限位，且不符合以上特殊情况的页面。
 //   这类页面需要在父进程和子进程的页表项中都使用PTE_COW 权限位进行保护。
-static void duppage(u_int envid, u_int page_number) {
+static void duppage(u_int child_envid, u_int page_number) {
   u_int page_address;
   u_int permission;
+  u_int parent_envid = 0;
 
   // 从页控制块编号获取地址
   page_address = page_number << PGSHIFT;
   permission = vpt[page_number] & 0xfff;
 
-  /* Step 2: If the page is writable, and not shared with children, and not marked as COW yet,
-   * then map it as copy-on-write, both in the parent (0) and the child (envid). */
-  /* Hint: The page should be first mapped to the child before remapped in the parent. (Why?)
-   */
   u_int if_set_cow = 0;
   // 如果页面可写，并且不与子进程共享，且还未标记为PTE_COW，则在父子进程中同时设置为写时复制
-  if ((permission & PTE_D) && !(permission & PTE_LIBRARY)) {
+  if ((permission & PTE_D) &&   // 页面可写
+      !(permission & PTE_LIBRARY)) {  // 页面不与子进程共享
+    // 将页面设置为 不可写 且 写时复制
     permission = (permission & ~ PTE_D) | PTE_COW;
     if_set_cow = 1;
   }
 
-  //
-  syscall_mem_map(0, page_address, envid, page_address, permission);
+  // 设置子进程的虚拟地址空间：共享父进程的页面
+  syscall_mem_map(parent_envid, page_address, child_envid, page_address, permission);
 
+  // 对于父进程：其实是设置权限，但不添加新的函数，实现操作的统一
   if (if_set_cow) {
-    syscall_mem_map(0, page_address, 0, page_address, permission);
+    syscall_mem_map(parent_envid, page_address, parent_envid, page_address, permission);
   }
 }
 
@@ -120,34 +119,37 @@ int fork(void) {
   u_int child;
   u_int i;
 
-  /* Step 1: Set our TLB Mod user exception entry to 'cow_entry' if not done yet. */
+  // 由于创建了子进程，共享很多信息，将写入异常的处理函数设置为 写时复制的异常处理函数
   if (env->env_user_tlb_mod_entry != (u_int)cow_entry) {
+    // 为什么不直接写：在用户态只能读部分内核态信息，不能进行写操作，由硬件屏蔽
     try(syscall_set_tlb_mod_entry(0, cow_entry));
   }
-  
-  /* Step 2: Create a child env that's not ready to be scheduled. */
-  // Hint: 'env' should always point to the current env itself, so we should fix it to the
-  // correct value.
+
+  // 由于继承了栈帧，在父子两进程来看，都是进行到了这里，需要根据返回值进行判断自身的性质
   child = syscall_exofork();
+
+  // 如果是子进程
+  // 初始创建子进程后，子进程处于阻塞状态，等待父进程进行调度
   if (child == 0) {
+    // 将env指针指向自身进程控制块：根据id得到，之前还指向父进程
     env = envs + ENVX(syscall_getenvid());
     return 0;
   }
 
-  // 父子进程虽然共享了页表，但页表项还没有设置PTE_COW位，需要通过 duppage 函数设置
-  // 如果当前页表项具有PTE_D 权限，且不是共享页面 PTE_LIBRARY，则需要重新设置页表项的权限。
-  // duppage会对每一个页表项进行操作，因此我们需要在 fork 中遍历所有的页表项。
-  // 只遍历 USTACKTOP 之下的地址空间，因为**其上的空间总是会被共享**。
+  // 如果是父进程，则由父进程设置子进程的地址空间，同时将父进程页面权限设置为写时复制PTE_COW
+  // duppage对每一个页表项进行操作，需要遍历所有USTACKTOP之下的地址空间，因为其上的空间为内核空间，总被共享
   for (i = 0; i < VPN(USTACKTOP); i++) {
     // 在调用 duppage 之前，我们判断页目录项和页表项是否有效。
-    // 如果不判断则会在 duppage 函数中发生异常（最终是由 page_lookup 产生的）。
-    // 需要注意取页目录项的方法，vpd是页目录项数组，i相当于地址的高20位，需要取得地址的高10位作为页目录的索引
-    if ((vpd[i >> 10] & PTE_V) && (vpt[i] & PTE_V)) {
-      duppage(child, i);
-    }
+    // 如果不判断则会在 duppage 函数中发生异常（最终是由page_lookup产生的）
+
+    // vpd是页目录项数组，i相当于地址的高20位，需要取得地址的高10位作为页目录的索引
+    if ((vpd[i >> 10] & PTE_V) && // 页目录有效
+        (vpt[i] & PTE_V)          // 页表有效
+    ) { duppage(child, i); }
   }
 
-  // 设置子进程的写时复制异常处理函数
+  // 设置子进程的写时复制异常处理函数，供do_tlb_mod使用
+  // 见tlbex.c
   try(syscall_set_tlb_mod_entry(child, cow_entry));
 
   // 设置子进程的运行状态
