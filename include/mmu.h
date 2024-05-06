@@ -164,7 +164,9 @@
 // 异常处理栈栈地址
 #define UXSTACKTOP UTOP
 
+// 用户栈地址
 #define USTACKTOP (UTOP - 2 * PTMAP)
+
 #define UTEXT PDMAP
 #define UCOW (UTEXT - PTMAP)
 #define UTEMP (UCOW - PTMAP)
