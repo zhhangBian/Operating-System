@@ -27,8 +27,7 @@ exc_gen_entry:
   # 取得Cause寄存器中的2~6位，也就是对应的异常码
   andi    t0, 0x7c
   # 以得到的异常码作为索引，在exception_handlers数组中找到对应的中断处理函数
-  # 得到处理函数后作为返回值填入$t0
-  # 在traps.c中
+  # 得到处理函数后作为返回值填入$t0，在traps.c中
   lw      t0, exception_handlers(t0)
   # 跳转到对应的中断处理函数中，响应异常
   jr      t0

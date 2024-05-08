@@ -6,6 +6,7 @@
 #include <sched.h>
 #include <syscall.h>
 
+// 指向当前进程，在内核态
 extern struct Env *curenv;
 
 /* Overview:
@@ -59,7 +60,7 @@ u_int sys_getenvid(void) {
  *   This function will never return.
  */
 // void sys_yield(void);
-// 实现用户进程对CPU 的放弃，从而调度其他的进程
+// 实现用户进程对CPU 的放弃，从而调度其他的进程，本质是强制切换进程，进行一次调度
 void __attribute__((noreturn)) sys_yield(void) {
   // 强制切换进程
   schedule(1);
@@ -95,7 +96,8 @@ int sys_env_destroy(u_int envid) {
  *   Returns 0 on success.
  *   Returns the original error if underlying calls fail.
  */
-// 注册进程的页 写入异常 处理函数
+// 注册进程的 页写入异常 处理函数
+// 涉及内核态，只能在此由系统调用实现
 int sys_set_tlb_mod_entry(u_int envid, u_int func_address) {
   struct Env *env;
   // 获取进程控制块
@@ -110,6 +112,7 @@ int sys_set_tlb_mod_entry(u_int envid, u_int func_address) {
  *   Check 'va' is illegal or not, according to include/mmu.h
  */
 // 判断是否为正常用户空间虚拟地址
+// 内联函数，不会修改栈帧
 static inline int is_illegal_va(u_long va) {
   return va < UTEMP || va >= UTOP;
 }
@@ -132,10 +135,6 @@ static inline int is_illegal_va_range(u_long va, u_int len) {
  *   Return -E_BAD_ENV: 'checkperm' of 'envid2env' fails for 'envid'.
  *   Return -E_INVAL:   'va' is illegal (should be checked using 'is_illegal_va').
  *   Return the original error: underlying calls fail (you can use 'try' macro).
- *
- * Hint:
- *   You may want to use the following functions:
- *   'envid2env', 'page_alloc', 'page_insert', 'try' (macro)
  */
 // 分配内存：给该程序所允许的虚拟内存空间显式地分配实际的物理内存，建立一段映射关系
 // 对于OS，是建立一段映射关系，将一个进程运行空间中的某段地址与实际物理内存进行映射
@@ -169,10 +168,6 @@ int sys_mem_alloc(u_int envid, u_int virtual_address, u_int permission) {
  *   Return -E_BAD_ENV: 'checkpermission' of 'envid2env' fails for 'src_envid' or 'dst_envid'.
  *   Return -E_INVAL: 'src_virtual_address' or 'dst_virtual_address' is illegal, or 'src_virtual_address' is unmapped in 'src_envid'.
  *   Return the original error: underlying calls fail.
- *
- * Hint:
- *   You may want to use the following functions:
- *   'envid2env', 'page_lookup', 'page_insert'
  */
 // 共共享物理页面，将目标进程的虚拟地址映射到  源进程虚拟地址对应的物理内存
 int sys_mem_map(u_int src_envid, u_int src_virtual_address,
@@ -238,18 +233,17 @@ int sys_mem_unmap(u_int envid, u_int virtual_address) {
  *   - The new env's 'env_status' is set to 'ENV_NOT_RUNNABLE'.
  *   - The new env's 'env_pri' is copied from 'curenv'.
  *   Returns the original error if underlying calls fail.
- *
- * Hint:
- *   This syscall works as an essential step in user-space 'fork' and 'spawn'.
  */
-// 实现fork函数
+// 实现fork函数，创建一个子进程
 int sys_exofork(void) {
   // 子进程的进程控制块
   struct Env *env;
   // 初始化一个新的进程控制块
   try(env_alloc(&env, curenv->env_id));
 
-  // 复制父进程调用系统操作时的现场：就是当前的现场
+  // 复制父进程调用系统操作时的现场，并不一定等同于curenv->tf中的信息
+  // 需要注意这里不能使用 curenv->env_tf，因为 curenv->env_tf存储的是进程调度，是其他进程之前的tf
+  // 只有一处进行了env_tf的赋值。就是在env_run函数中。
   env->env_tf = *((struct Trapframe *)KSTACKTOP - 1);
 
   // 将返回值（子进程envid）设置为0：这里是在初始化子进程
@@ -269,16 +263,12 @@ int sys_exofork(void) {
  *   Returns 0 on success.
  *   Returns -E_INVAL if 'status' is neither 'ENV_RUNNABLE' nor 'ENV_NOT_RUNNABLE'.
  *   Returns the original error if underlying calls fail.
- *
- * Hint:
- *   The invariant that 'env_sched_list' contains and only contains all runnable envs should be
- *   maintained.
  */
 // 根据设定的状态将进程加入或移除调度队列
 int sys_set_env_status(u_int envid, u_int status) {
   struct Env *env;
 
-  // 检查进程状态是否有效
+  // 检查想要设置的进程状态是否有效
   if (status != ENV_RUNNABLE && status != ENV_NOT_RUNNABLE) {
     return -E_INVAL;
   }
@@ -310,7 +300,8 @@ int sys_set_env_status(u_int envid, u_int status) {
  *  Returns -E_INVAL if the environment cannot be manipulated or 'tf' is invalid.
  *  Returns the original error if other underlying calls fail.
  */
-// 将参数envid对应的进程的栈帧设置为当前的异常栈
+// 将进程的trap frame修改为传入的参数struct Trapframe *tf对应的 trap frame
+// 当从该系统调用返回时，将返回设置的栈帧中epc的位置
 int sys_set_trapframe(u_int envid, struct Trapframe *tf) {
   // 检查地址是否合法
   if (is_illegal_va_range((u_long)tf, sizeof *tf)) {
@@ -362,12 +353,11 @@ int sys_ipc_recv(u_int dst_virtual_address) {
     return -E_INVAL;
   }
 
-  // 进行通信前的准备工作：握手
-  // 表明该进程准备接受发送方的消息
+  // 进行通信前的准备工作：握手，表明该进程准备接受发送方的消息
+  // 进行接受是手动调用的，设置自身为接受态
   curenv->env_ipc_recving = 1;
   // 表明自己要将接受到的页面与dst_va成映射
   curenv->env_ipc_dstva= dst_virtual_address;
-
   // 阻塞当前进程，等待对方进程发送数据
   // 阻塞的实现：直接移出调度队列，等待持有锁的资源手动调度阻塞进程
   curenv->env_status = ENV_NOT_RUNNABLE;
@@ -446,7 +436,7 @@ int sys_ipc_try_send(
 
     // 在接受进程中建立映射关系
     try(page_insert(
-          env_receive->env_pgdir, // 接受进程的夜幕里
+          env_receive->env_pgdir, // 接受进程的页目录
           env_receive->env_asid,  // 接受进程的asid
           page_shared,            // 共享的物理页面控制块
           env_receive->env_ipc_dstva, // 接受到的页面 映射到 接收进程的虚拟地址
@@ -614,7 +604,7 @@ void do_syscall(struct Trapframe *tf) {
   syscall_func = syscall_table[syscall_type];
 
   // 取出填入的参数
-  // 先取出保存在寄存器中的前三个参数
+  // 先取出保存在寄存器中的后三个参数（MIPS只允许最多四个参数）
   u_int arg1 = tf->regs[5];
   u_int arg2 = tf->regs[6];
   u_int arg3 = tf->regs[7];
@@ -623,7 +613,7 @@ void do_syscall(struct Trapframe *tf) {
   u_int arg4 = *(u_int *)(sp_address+16);
   u_int arg5 = *(u_int *)(sp_address+20);
 
-  // 将函数指针存入返回值 $v0
+  // 将函数指针存入返回值 $v0，存入返回值后由jr执行，在entry.S中
   // 即使不需要这么多参数，也先填入
   tf->regs[2] = syscall_func(arg1, arg2, arg3, arg4, arg5);
 }

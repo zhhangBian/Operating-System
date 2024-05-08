@@ -82,6 +82,7 @@ static void duppage(u_int child_envid, u_int page_number) {
 
   // 从页控制块编号获取地址
   page_address = page_number << PGSHIFT;
+  // 暴露给用户态的页表获取方式
   permission = vpt[page_number] & 0xfff;
 
   u_int if_set_cow = 0;
@@ -116,21 +117,22 @@ static void duppage(u_int child_envid, u_int page_number) {
 // fork()是一个用户态函数！
 // 在此，进程进行分叉，原先的行为逻辑一分为二，开始进行独立的运行
 int fork(void) {
-  u_int child;
+  u_int fork_back_envid;
   u_int i;
 
-  // 由于创建了子进程，共享很多信息，将写入异常的处理函数设置为 写时复制的异常处理函数
+  // 先为父进程设置写时复制异常处理函数
+  // 涉及函数调用，会修改用户栈，而先前用户栈已经被共享给了子进程，会涉及写时复制异常问题
   if (env->env_user_tlb_mod_entry != (u_int)cow_entry) {
     // 为什么不直接写：在用户态只能读部分内核态信息，不能进行写操作，由硬件屏蔽
-    try(syscall_set_tlb_mod_entry(0, cow_entry));
+    try(syscall_set_tlb_mod_entry(/*为自己设置*/0, cow_entry));
   }
 
   // 由于继承了栈帧，在父子两进程来看，都是进行到了这里，需要根据返回值进行判断自身的性质
-  child = syscall_exofork();
+  fork_back_envid = syscall_exofork();
 
-  // 如果是子进程
+  // 如果是子进程，涉及函数调用，会修改用户栈
   // 初始创建子进程后，子进程处于阻塞状态，等待父进程进行调度
-  if (child == 0) {
+  if (fork_back_envid == 0) {
     // 将env指针指向自身进程控制块：根据id得到，之前还指向父进程
     env = envs + ENVX(syscall_getenvid());
     return 0;
@@ -146,18 +148,15 @@ int fork(void) {
     // vpd是页目录项数组，i相当于地址的高20位，需要取得地址的高10位作为页目录的索引
     if ((vpd[i >> 10] & PTE_V) && // 页目录有效
         (vpt[i] & PTE_V)          // 页表有效
-    ) {
-      // duppage中涉及函数调用，会修改用户栈。而先前用户栈已经被共享给了子进程，会涉及 写时复制 问题
-      duppage(child, i);
-    }
+    ) { duppage(fork_back_envid, i); }
   }
 
-  // 设置子进程的写时复制异常处理函数，供do_tlb_mod使用
+  // 为子进程设置写时复制异常处理函数，供do_tlb_mod使用
   // 见tlbex.c
-  try(syscall_set_tlb_mod_entry(child, cow_entry));
+  try(syscall_set_tlb_mod_entry(/*为子进程设置*/fork_back_envid, cow_entry));
 
   // 设置子进程的运行状态
-  try(syscall_set_env_status(child, ENV_RUNNABLE));
+  try(syscall_set_env_status(fork_back_envid, ENV_RUNNABLE));
 
-  return child;
+  return fork_back_envid;
 }

@@ -154,9 +154,9 @@
 
 // 页表起始地址
 #define UVPT (ULIM - PDMAP)
-// 用户空间的Pages数组对应的虚拟地址起始处
+// 用户空间的Pages数组对应的虚拟地址起始处，暴露给用户态
 #define UPAGES (UVPT - PDMAP)
-// 用户空间的Envs数组对应的虚拟地址起始处
+// 用户空间的Envs数组对应的虚拟地址起始处，暴露给用户态
 #define UENVS (UPAGES - PDMAP)
 
 // 用户空间能使用的最高虚拟地址

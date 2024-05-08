@@ -139,9 +139,6 @@ int envid2env(u_int envid, struct Env **env_wanted, int check_if_parent) {
 /* Overview:
  *   Mark all environments in 'envs' as free and insert them into the 'env_free_list'.
  *   Insert in reverse order, so that the first call to 'env_alloc' returns 'envs[0]'.
- *
- * Hints:
- *   You may use these macro definitions below: 'LIST_INIT', 'TAILQ_INIT', 'LIST_INSERT_HEAD'
  */
 void env_init(void) {
   int i;
