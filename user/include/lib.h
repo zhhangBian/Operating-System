@@ -8,6 +8,17 @@
 #include <syscall.h>
 #include <trap.h>
 
+void sem_open(int sem_id, int n);
+int sem_wait(int sem_id);
+int sem_post(int sem_id);
+int sem_kill(int sem_id);
+
+void syscall_sem_open(int sem_id, int n);
+int syscall_sem_wait(int sem_id);
+int syscall_sem_post(int sem_id);
+int syscall_sem_kill(int sem_id);
+
+
 // 暴露给用户态的页表的起始地址，只有可读权限
 #define vpt ((const volatile Pte *)UVPT)
 // 暴露给用户态的页目录的起始地址，只有可读权限
