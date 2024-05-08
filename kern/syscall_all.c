@@ -532,18 +532,17 @@ int sys_msg_send(u_int envid, u_int value, u_int srcva, u_int perm) {
 	TAILQ_REMOVE(&msg_free_list, m, msg_link);
 
 	m->msg_tier++;
-	m->status = MSG_SENT;
+	m->msg_status = MSG_SENT;
 	m->msg_value = value;
 	m->msg_from = curenv->env_id;
 	m->msg_perm = PTE_V | perm;
 	
 	if(srcva!=0) {
-		p = page_lookup(curenv->env_pdgir, srcva, NULL);
+		p = page_lookup(curenv->env_pgdir, srcva, NULL);
 		m->msg_page = p;
 		p->pp_ref++;
-		
-		TAILQ_INSERT_TAIL(&(e->env_msg_list), m, msg_link); 
 	}
+  TAILQ_INSERT_TAIL(&e->env_msg_list, m, msg_link);
 	return msg2id(m);
 }
 
@@ -559,7 +558,7 @@ int sys_msg_recv(u_int dstva) {
 	}
 
 	/* Your Code Here (2/3) */
-	m = TAILQ_FIRST(curenv->env_msg_list);
+	m = TAILQ_FIRST(&curenv->env_msg_list);
 	TAILQ_REMOVE(&curenv->env_msg_list, m, msg_link);
 
 	curenv->env_msg_value = m->msg_value;
@@ -568,8 +567,8 @@ int sys_msg_recv(u_int dstva) {
 
 	if(dstva!=0 && m->msg_page!=NULL) {
 		p=m->msg_page;
-		p->pp_ref--;
-		try(page_insert(curenv->env_pgdir, curenv->env_asid, p, dstva, m->msg_perm);
+		page_decref(p);
+		try(page_insert(curenv->env_pgdir, curenv->env_asid, p, dstva, m->msg_perm));
 	}
 
 	m->msg_status = MSG_RECV;
@@ -581,7 +580,7 @@ int sys_msg_status(u_int msgid) {
 	struct Msg *m;
 
 	/* Your Code Here (3/3) */
-	m=msgs[MSGX(msgid)];
+	m=&msgs[MSGX(msgid)];
 	int id=msg2id(m);
 	if(id == msgid) {
 		return m->msg_status;

@@ -263,7 +263,7 @@ int env_alloc(struct Env **new, u_int parent_id) {
     return func_info;
   }
 
-	TAILQ_INIT(env->env_msg_list);
+	TAILQ_INIT(&env->env_msg_list);
 
   // 设置进程相关的属性
   /* Step 4: Initialize the sp and 'cp0_status' in 'e->env_tf'.
