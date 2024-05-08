@@ -8,9 +8,9 @@
 #include <syscall.h>
 #include <trap.h>
 
-// 暴露给用户态的页表的起始地址
+// 暴露给用户态的页表的起始地址，只有可读权限
 #define vpt ((const volatile Pte *)UVPT)
-// 暴露给用户态的页目录的起始地址
+// 暴露给用户态的页目录的起始地址，只有可读权限
 #define vpd ((const volatile Pde *)(UVPT + (PDX(UVPT) << PGSHIFT)))
 // 暴露给用户态的envs：获取Envs进程控制块管理数组的起始地址
 #define envs ((const volatile struct Env *)UENVS)
