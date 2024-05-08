@@ -11,13 +11,7 @@ tlb_miss_entry:
 exc_gen_entry:
   # 使用SAVE_ALL 宏将当前上下文保存到内核的异常栈中
   SAVE_ALL
-  /*
-  * Note: When EXL is set or UM is unset, the processor is in kernel mode.
-  * When EXL is set, the value of EPC is not updated when a new exception occurs.
-  * To keep the processor in kernel mode and enable exception reentrancy,
-  * we unset UM and EXL, and unset IE to globally disable interrupts.
-  */
-  # 清除Status 寄存器中的UM、EXL、IE位
+  # 清除Status寄存器中的UM、EXL、IE位
   # 以保持处理器处于内核态（UM==0）、关闭中断且允许嵌套异常。
   mfc0    t0, CP0_STATUS
   and     t0, t0, ~(STATUS_UM | STATUS_EXL | STATUS_IE)
