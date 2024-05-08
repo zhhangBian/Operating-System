@@ -532,7 +532,7 @@ int sys_sem_wait(int sem_id) {
 	}
 	
 	if(sems[sem_id]==0) {
-		return -E_SEM_NOT_OPEN;
+		return -114514;
 	}
 
 	sems[sem_id]--;
