@@ -7,7 +7,9 @@ static void os_assert(int cond, const char *err) {
 }
 
 int main() {
+	printk("yes 1\n");
 	sem_open(1, 1);
+	printk("yes 2\n");
 
 	os_assert(sem_wait(2) != 0, "ERROR: RETURNING 0 WHEN SEM DOES NOT EXIST");
 	os_assert(sem_wait(2) == -14, "ERROR: NOT RETURNING CORRECT ERROR CODE");
