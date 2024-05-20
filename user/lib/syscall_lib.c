@@ -88,13 +88,11 @@ int syscall_cgetc() {
 }
 
 // 向设备写入
-int syscall_write_dev(void *va, u_int dev, u_int size) {
-  /* Exercise 5.2: Your code here. (1/2) */
-
+int syscall_write_dev(void *data_addr, u_int device_addr, u_int data_len) {
+  return msyscall(SYS_write_dev, data_addr, device_addr, data_len);
 }
 
 // 从设备读入
-int syscall_read_dev(void *va, u_int dev, u_int size) {
-  /* Exercise 5.2: Your code here. (2/2) */
-
+int syscall_read_dev(void *data_addr, u_int device_addr, u_int data_len) {
+  return msyscall(SYS_read_dev, data_addr, device_addr, data_len);
 }

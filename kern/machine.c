@@ -15,6 +15,7 @@ void printcharc(char ch) {
     printcharc('\r');
   }
   while (!(*((volatile uint8_t *)(KSEG1 + MALTA_SERIAL_LSR)) & MALTA_SERIAL_THR_EMPTY)) {}
+  // 通过往内存的(0x180003F8+0xA0000000) 地址写入字符，实现向控制台的输出
   *((volatile uint8_t *)(KSEG1 + MALTA_SERIAL_DATA)) = ch;
 }
 /* End of Key Code "printcharc" */

@@ -319,7 +319,7 @@ int sys_set_trapframe(u_int envid, struct Trapframe *tf) {
     // current trapframe.
     // 返回当前异常栈的返回值，否则会改变当前进程的返回值
     return tf->regs[2];
-  } 
+  }
   // 如果不是当前进程，则直接设置
   else {
     env->env_tf = *tf;
@@ -486,10 +486,30 @@ int sys_cgetc(void) {
  *	* ---------------------------------*
  */
 // 向设备写入
-int sys_write_dev(u_int va, u_int pa, u_int len) {
-  /* Exercise 5.1: Your code here. (1/2) */
+// 从虚拟地址data_addr读取长度为len的数据，写入到对应的device_addr中
+// device_addr位于kseg1区，不需要经过cache，由硬件直接完成地址转换
+int sys_write_dev(u_int data_addr, u_int device_addr, u_int data_len) {
+  // 相应的设备地址
+  u_int console_addr_begin = 0x180003f8;
+  u_int console_addr_end = 0x180003f8 + 0x20;
+  u_int IDE_disk_addr_begin = 0x180001f0;
+  u_int IDE_disk_addr_end = 0x180001f0 + 0x8;
+  // 判断数据所在的虚拟地址是否合法
+  if (is_illegal_va_range(data_addr, len) &&
+      !(data_len==1 || data_len==2 || data_len==4)) {
+    return -E_INVAL;
+  }
+  // 判单设备地址是否合法
+  if ((device_addr >= console_addr_begin && device_addr + data_len <= console_addr_end) ||
+      (device_addr >= IDE_disk_addr_begin && device_addr + data_len <= IDE_disk_addr_end)) {
+    // 直接拷贝数据，具体操作由硬件完成
+    // 从内存到设备
+    memcpy((void *)(KSEG1 | device_addr), (void *)data_addr, data_len);
 
-  return 0;
+    return 0;
+  }
+
+  return -E_INVAL;
 }
 
 /* Overview:
@@ -508,9 +528,28 @@ int sys_write_dev(u_int va, u_int pa, u_int len) {
  *  You can use function 'ioread32', 'ioread16' and 'ioread8' to read data from device.
  */
 // 从设备读入
-int sys_read_dev(u_int va, u_int pa, u_int len) {
-  /* Exercise 5.1: Your code here. (2/2) */
+int sys_read_dev(u_int data_addr, u_int device_addr, u_int data_len) {
+  // 相应的设备地址
+  u_int console_addr_begin = 0x180003f8;
+  u_int console_addr_end = 0x180003f8 + 0x20;
+  u_int IDE_disk_addr_begin = 0x180001f0;
+  u_int IDE_disk_addr_end = 0x180001f0 + 0x8;
+  // 判断数据所在的虚拟地址是否合法
+  if (is_illegal_va_range(data_addr, len) &&
+      !(data_len==1 || data_len==2 || data_len==4)) {
+    return -E_INVAL;
+  }
+  // 判单设备地址是否合法
+  if ((device_addr >= console_addr_begin && device_addr + data_len <= console_addr_end) ||
+      (device_addr >= IDE_disk_addr_begin && device_addr + data_len <= IDE_disk_addr_end)) {
+    // 直接拷贝数据，具体操作由硬件完成
+    // 从设备到内存
+    memcpy((void *)data_addr, (void *)(KSEG1 | device_addr), data_len);
 
+    return 0;
+  }
+
+  return -E_INVAL;
   return 0;
 }
 
