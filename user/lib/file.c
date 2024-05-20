@@ -57,7 +57,7 @@ int open(const char *path, int mode) {
 
   // Step 5: Return the number of file descriptor using 'fd2num'.
   /* Exercise 5.9: Your code here. (5/5) */
-  return fd2num(fd)
+  return fd2num(fd);
 }
 
 // Overview:

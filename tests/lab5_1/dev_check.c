@@ -9,10 +9,13 @@ int main() {
 	char c __attribute__((aligned(4))) = 0;
 	u_int cons_lsr = MALTA_SERIAL_LSR;
 	u_int cons = MALTA_SERIAL_DATA;
+  //debugf("1111\n");
 	while (1) {
+    //debugf("2222\n");
 		if ((r = syscall_read_dev(&c, cons_lsr, 1)) != 0) {
-			debugf("syscall_read_dev is bad\n");
+			//debugf("syscall_read_dev is bad\n");
 		}
+    //debugf("3333\n");
 		if (c & MALTA_SERIAL_DATA_READY) {
 			if ((r = syscall_read_dev(&c, cons, 1)) != 0) {
 				debugf("syscall_read_dev is bad\n");

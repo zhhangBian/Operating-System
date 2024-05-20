@@ -495,7 +495,7 @@ int sys_write_dev(u_int data_addr, u_int device_addr, u_int data_len) {
   u_int IDE_disk_addr_begin = 0x180001f0;
   u_int IDE_disk_addr_end = 0x180001f0 + 0x8;
   // 判断数据所在的虚拟地址是否合法
-  if (is_illegal_va_range(data_addr, len) &&
+  if (is_illegal_va_range(data_addr, data_len) &&
       !(data_len==1 || data_len==2 || data_len==4)) {
     return -E_INVAL;
   }
@@ -535,7 +535,7 @@ int sys_read_dev(u_int data_addr, u_int device_addr, u_int data_len) {
   u_int IDE_disk_addr_begin = 0x180001f0;
   u_int IDE_disk_addr_end = 0x180001f0 + 0x8;
   // 判断数据所在的虚拟地址是否合法
-  if (is_illegal_va_range(data_addr, len) &&
+  if (is_illegal_va_range(data_addr, data_len) &&
       !(data_len==1 || data_len==2 || data_len==4)) {
     return -E_INVAL;
   }
@@ -550,7 +550,6 @@ int sys_read_dev(u_int data_addr, u_int device_addr, u_int data_len) {
   }
 
   return -E_INVAL;
-  return 0;
 }
 
 // 系统调用函数列表
