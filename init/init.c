@@ -69,6 +69,7 @@ void mips_init(u_int argc, char **argv, char **penv, u_int ram_low_size) {
 
   // lab5:
   ENV_CREATE(user_fstest);
+  // 文件系统服务进程
   ENV_CREATE(fs_serv);  // This must be the second env!
   ENV_CREATE(user_devtst);
 
