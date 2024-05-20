@@ -489,27 +489,26 @@ int sys_cgetc(void) {
 // 从虚拟地址data_addr读取长度为len的数据，写入到对应的device_addr中
 // device_addr位于kseg1区，不需要经过cache，由硬件直接完成地址转换
 int sys_write_dev(u_int data_addr, u_int device_addr, u_int data_len) {
-  // 相应的设备地址
-  u_int console_addr_begin = 0x180003f8;
-  u_int console_addr_end = 0x180003f8 + 0x20;
-  u_int IDE_disk_addr_begin = 0x180001f0;
-  u_int IDE_disk_addr_end = 0x180001f0 + 0x8;
   // 判断数据所在的虚拟地址是否合法
-  if (is_illegal_va_range(data_addr, data_len) &&
-      !(data_len==1 || data_len==2 || data_len==4)) {
+  if (is_illegal_va_range(data_addr, data_len)) {
     return -E_INVAL;
   }
-  // 判单设备地址是否合法
-  if ((device_addr >= console_addr_begin && device_addr + data_len <= console_addr_end) ||
-      (device_addr >= IDE_disk_addr_begin && device_addr + data_len <= IDE_disk_addr_end)) {
-    // 直接拷贝数据，具体操作由硬件完成
-    // 从内存到设备
-    memcpy((void *)(KSEG1 | device_addr), (void *)data_addr, data_len);
-
-    return 0;
+  // 检查设备地址合法性
+  if (!((0x180003f8 <= device_addr && device_addr + data_len <= 0x18000418) || 
+        (0x180001f0 <= device_addr && device_addr + data_len <= 0x180001f8))) {
+    return -E_INVAL;
   }
-
-  return -E_INVAL;
+  // 判断数据长度是否满足要求
+  if (data_len == 1) {
+    iowrite8(*(uint8_t *)data_addr, device_addr);
+  } else if (data_len == 2) {
+    iowrite16(*(uint16_t *)data_addr, device_addr);
+  } else if (data_len == 4) {
+    iowrite32(*(uint32_t *)data_addr, device_addr);
+  } else {
+    return -E_INVAL;
+  }
+  return 0;
 }
 
 /* Overview:
@@ -529,27 +528,26 @@ int sys_write_dev(u_int data_addr, u_int device_addr, u_int data_len) {
  */
 // 从设备读入
 int sys_read_dev(u_int data_addr, u_int device_addr, u_int data_len) {
-  // 相应的设备地址
-  u_int console_addr_begin = 0x180003f8;
-  u_int console_addr_end = 0x180003f8 + 0x20;
-  u_int IDE_disk_addr_begin = 0x180001f0;
-  u_int IDE_disk_addr_end = 0x180001f0 + 0x8;
   // 判断数据所在的虚拟地址是否合法
-  if (is_illegal_va_range(data_addr, data_len) &&
-      !(data_len==1 || data_len==2 || data_len==4)) {
+  if (is_illegal_va_range(data_addr, data_len)) {
     return -E_INVAL;
   }
-  // 判单设备地址是否合法
-  if ((device_addr >= console_addr_begin && device_addr + data_len <= console_addr_end) ||
-      (device_addr >= IDE_disk_addr_begin && device_addr + data_len <= IDE_disk_addr_end)) {
-    // 直接拷贝数据，具体操作由硬件完成
-    // 从设备到内存
-    memcpy((void *)data_addr, (void *)(KSEG1 | device_addr), data_len);
-
-    return 0;
+  // 检查设备地址合法性
+  if (!((0x180003f8 <= device_addr && device_addr + data_len <= 0x18000418) || 
+        (0x180001f0 <= device_addr && device_addr + data_len <= 0x180001f8))) {
+    return -E_INVAL;
   }
-
-  return -E_INVAL;
+  // 判断数据长度是否满足要求
+  if (data_len == 1) {
+    *(uint8_t *)data_addr = ioread8(device_addr);
+  } else if (data_len == 2) {
+    *(uint16_t *)data_addr = ioread16(device_addr);
+  } else if (data_len == 4) {
+    *(uint32_t *)data_addr = ioread32(device_addr);
+  } else {
+    return -E_INVAL;
+  }
+	return 0;
 }
 
 // 系统调用函数列表

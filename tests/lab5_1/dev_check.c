@@ -15,7 +15,7 @@ int main() {
 		if ((r = syscall_read_dev(&c, cons_lsr, 1)) != 0) {
 			//debugf("syscall_read_dev is bad\n");
 		}
-    //debugf("3333\n");
+    //debugf("%c\n",c);
 		if (c & MALTA_SERIAL_DATA_READY) {
 			if ((r = syscall_read_dev(&c, cons, 1)) != 0) {
 				debugf("syscall_read_dev is bad\n");
@@ -23,12 +23,14 @@ int main() {
 		} else {
 			c = 0;
 		}
+
 		if (c == '\r') {
 			break;
 		}
 		if (c != 0) {
 			buf[i++] = c;
 		}
+    //debugf("%c",c);
 	}
 	if (i == 14) {
 		debugf("syscall_read_dev is good\n");

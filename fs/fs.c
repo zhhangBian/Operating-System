@@ -182,7 +182,11 @@ int block_is_free(u_int blockno) {
     return 0;
   }
 
-  return (bitmap[blockno / 32] & (1 << (blockno % 32))) ? 1 : 0;
+  if (bitmap[blockno / 32] & (1 << (blockno % 32))) {
+    return 1;
+  }
+
+  return 0;
 }
 
 // Overview:

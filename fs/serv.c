@@ -340,9 +340,13 @@ void serve_sync(u_int envid) {
  * call the corresponding serve function.
  */
 void *serve_table[MAX_FSREQNO] = {
-    [FSREQ_OPEN] = serve_open,	 [FSREQ_MAP] = serve_map,     [FSREQ_SET_SIZE] = serve_set_size,
-    [FSREQ_CLOSE] = serve_close, [FSREQ_DIRTY] = serve_dirty, [FSREQ_REMOVE] = serve_remove,
-    [FSREQ_SYNC] = serve_sync,
+    [FSREQ_OPEN]          = serve_open,	 
+    [FSREQ_MAP]           = serve_map,     
+    [FSREQ_SET_SIZE]      = serve_set_size,
+    [FSREQ_CLOSE]         = serve_close, 
+    [FSREQ_DIRTY]         = serve_dirty, 
+    [FSREQ_REMOVE]        = serve_remove,
+    [FSREQ_SYNC]          = serve_sync,
 };
 
 /*
