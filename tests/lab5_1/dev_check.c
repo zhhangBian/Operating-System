@@ -13,7 +13,7 @@ int main() {
 	while (1) {
     //debugf("2222\n");
 		if ((r = syscall_read_dev(&c, cons_lsr, 1)) != 0) {
-			//debugf("syscall_read_dev is bad\n");
+			debugf("syscall_read_dev is bad\n");
 		}
     //debugf("%c\n",c);
 		if (c & MALTA_SERIAL_DATA_READY) {
