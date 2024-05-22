@@ -319,7 +319,7 @@ int sys_set_trapframe(u_int envid, struct Trapframe *tf) {
     // current trapframe.
     // 返回当前异常栈的返回值，否则会改变当前进程的返回值
     return tf->regs[2];
-  } 
+  }
   // 如果不是当前进程，则直接设置
   else {
     env->env_tf = *tf;
@@ -515,18 +515,18 @@ int sys_read_dev(u_int va, u_int pa, u_int len) {
 }
 
 int sys_clone(void *func, void *child_stack) {
-	if(pa2page(PADDR(curenv->env_pgdir))->pp_ref >=64) {
-		return -E_ACT_ENV_NUM_EXCEED;
-	}
+  if(pa2page(PADDR(curenv->env_pgdir))->pp_ref >=64) {
+    return -E_ACT_ENV_NUM_EXCEED;
+  }
 
-	struct Env *env;
-	try(env_clone(&env, curenv->env_id));
+  struct Env *env;
+  try(env_clone(&env, curenv->env_id));
 
-	env->env_tf = *((struct Trapframe *)KSTACKTOP - 1);
-	env->env_tf.cp0_epc = func;
-	env->env_tf.regs[29] = child_stack;
+  env->env_tf = *((struct Trapframe *)KSTACKTOP - 1);
+  env->env_tf.cp0_epc = func;
+  env->env_tf.regs[29] = child_stack;
 
-	// 将子进程的返回值（envid）设置为0
+  // 将子进程的返回值（envid）设置为0
   env->env_tf.regs[2] = 0;
   // 还在进行初始化，设置为不可调度
   env->env_status = ENV_RUNNABLE;
@@ -594,7 +594,7 @@ void *syscall_table[MAX_SYSNO] = {
     // 从设备读入
     [SYS_read_dev]          = sys_read_dev,
 
-	[SYS_clone] = sys_clone,
+  [SYS_clone] = sys_clone,
 };
 
 /* Overview:

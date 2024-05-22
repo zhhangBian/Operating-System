@@ -116,8 +116,8 @@ int envid2env(u_int envid, struct Env **env_wanted, int check_if_parent) {
   if (envid == 0) {
     *env_wanted = curenv;
     return 0;
-  } 
-  
+  }
+
   // 获取进程控制块，envid低10位是数组的索引
   env = envs + ENVX(envid);
 
@@ -246,9 +246,9 @@ int env_alloc(struct Env **new, u_int parent_id) {
   }
 
   /* Step 3: Initialize these fields for the new Env with appropriate values:
-   *   'env_user_tlb_mod_entry' (lab4), 
-   *   'env_runs' (lab6), 
-   *   'env_id' (lab3), 
+   *   'env_user_tlb_mod_entry' (lab4),
+   *   'env_runs' (lab6),
+   *   'env_id' (lab3),
    *   'env_asid' (lab3),
    *   'env_parent_id' (lab3)
    */
