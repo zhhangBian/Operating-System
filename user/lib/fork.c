@@ -152,7 +152,7 @@ int fork(void) {
 
   // 为子进程设置写时复制异常处理函数，供do_tlb_mod使用
   // 见tlbex.c
-  try(syscall_set_tlb_mod_entry(fork_return_envid, cow_entry));、
+  try(syscall_set_tlb_mod_entry(fork_return_envid, cow_entry));
 
   // 对子进程设置完毕，将其设置为可以运行，开始子进程波澜壮阔的一生
   try(syscall_set_env_status(fork_return_envid, ENV_RUNNABLE));
