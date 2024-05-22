@@ -5,6 +5,7 @@
 # 是叶函数，没有局部变量，不需要分配栈帧
 LEAF(msyscall)
   # 调用syscall陷入内核态
+  # 进入handle_sys函数，见genex.S
   syscall
   # 完成系统调用后返回
   jr    ra

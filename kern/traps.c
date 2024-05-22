@@ -22,6 +22,7 @@ void (*exception_handlers[32])(void) = {
     [0] = handle_int,
     [2 ... 3] = handle_tlb,
 #if !defined(LAB) || LAB >= 4
+    // 1号异常为写入cow页面
     [1] = handle_mod,
     // 8号异常为系统调用，在调用syscall进入该异常分发
     // 调用handle_sys后，见genex.S

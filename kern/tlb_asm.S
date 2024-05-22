@@ -40,8 +40,6 @@ NO_SUCH_ENTRY:
   j       ra
 END(tlb_out)
 
-
-
 # TLB重填函数： do_tlb_refill
 # 使用 NESTED 定义函数标签，表示非叶函数
 NESTED(do_tlb_refill, 24, zero)
@@ -70,7 +68,6 @@ do_tlb_refill_call:
   mtc0    a0, CP0_ENTRYLO0 /* Even page table entry */
   mtc0    a1, CP0_ENTRYLO1 /* Odd page table entry */
   nop
-  /* Hint: use 'tlbwr' to write CP0.EntryHi/Lo into a random tlb entry. */
   # 执行tlbwr 将此时的EntryHi 与EntryLo0、EntryLo1 写入到TLB中
   tlbwr
 

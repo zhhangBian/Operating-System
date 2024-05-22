@@ -12,7 +12,9 @@ void exit(void) {
   user_panic("unreachable code");
 }
 
+// 当前进程的进程控制块，可以通过env获取当前进程的信息
 const volatile struct Env *env;
+
 extern int main(int, char **);
 
 void libmain(int argc, char **argv) {

@@ -32,6 +32,7 @@ int sys_print_cons(const void *s, u_int num) {
   if (((u_int)s + num) > UTOP || ((u_int)s) >= UTOP || (s > s + num)) {
     return -E_INVAL;
   }
+
   u_int i;
   for (i = 0; i < num; i++) {
     printcharc(((char *)s)[i]);
@@ -61,6 +62,7 @@ u_int sys_getenvid(void) {
  */
 // void sys_yield(void);
 // 实现用户进程对CPU 的放弃，从而调度其他的进程，本质是强制切换进程，进行一次调度
+// 这个函数不会返回
 void __attribute__((noreturn)) sys_yield(void) {
   // 强制切换进程
   schedule(1);
@@ -111,17 +113,17 @@ int sys_set_tlb_mod_entry(u_int envid, u_int func_address) {
 /* Overview:
  *   Check 'va' is illegal or not, according to include/mmu.h
  */
-// 判断是否为正常用户空间虚拟地址
+// 判断是否为正常用户空间虚拟地址，错误的话会返回真
 // 内联函数，不会修改栈帧
 static inline int is_illegal_va(u_long va) {
-  return va < UTEMP || va >= UTOP;
+  return (va < UTEMP) || (va >= UTOP);
 }
 
 static inline int is_illegal_va_range(u_long va, u_int len) {
   if (len == 0) {
     return 0;
   }
-  return va + len < va || va < UTEMP || va + len > UTOP;
+  return (va + len < va) || (va < UTEMP) || (va + len > UTOP);
 }
 
 /* Overview:
@@ -136,10 +138,7 @@ static inline int is_illegal_va_range(u_long va, u_int len) {
  *   Return -E_INVAL:   'va' is illegal (should be checked using 'is_illegal_va').
  *   Return the original error: underlying calls fail (you can use 'try' macro).
  */
-// 分配内存：给该程序所允许的虚拟内存空间显式地分配实际的物理内存，建立一段映射关系
-// 对于OS，是建立一段映射关系，将一个进程运行空间中的某段地址与实际物理内存进行映射
-// 从而可以通过该虚拟页面来对物理内存进行存取访问
-// 通过传入的进程标识符参数envid来确定发出请求的进程
+// 分配内存：给进程虚拟地址寻找一个物理内存块，建立映射关系
 int sys_mem_alloc(u_int envid, u_int virtual_address, u_int permission) {
   struct Env *env;
   struct Page *page_pointer;
@@ -150,9 +149,10 @@ int sys_mem_alloc(u_int envid, u_int virtual_address, u_int permission) {
   }
 
   // 获取envid对应的进程控制块，始终查询是否为当前进程的子进程
+  // 如果不为子进程：对没有亲缘关系的进程操作是不安全不合理的
   try(envid2env(envid, &env, 1));
 
-  // 获取物理页面控制块
+  // 获取一个空闲的物理页面控制块
   try(page_alloc(&page_pointer));
 
   // 建立地址映射关系
@@ -173,10 +173,11 @@ int sys_mem_alloc(u_int envid, u_int virtual_address, u_int permission) {
 int sys_mem_map(u_int src_envid, u_int src_virtual_address,
                 u_int dst_envid, u_int dst_virtual_address,
                 u_int permission) {
+  // 获取需要操作的进程控制块
   struct Env *src_env;
   struct Env *dst_env;
   // 所需要建立映射关系的物理页面
-  struct Page *page_pointer;
+  struct Page *page;
 
   // 判断虚拟地址是否位于用户空间
   if (is_illegal_va(src_virtual_address) || is_illegal_va(dst_virtual_address)) {
@@ -187,14 +188,14 @@ int sys_mem_map(u_int src_envid, u_int src_virtual_address,
   try(envid2env(src_envid, &src_env, 1));
   try(envid2env(dst_envid, &dst_env, 1));
 
-  // 获取 源进程虚拟地址 对应的 物理内存控制块
-  page_pointer = page_lookup(src_env->env_pgdir, src_virtual_address, NULL);
-  if (page_pointer == NULL) {
+  // 获取需要被空闲的物理页面
+  page = page_lookup(src_env->env_pgdir, src_virtual_address, NULL);
+  if (page == NULL) {
     return -E_INVAL;
   }
 
   // 将 目标进程对应的虚拟地址  与  源对应的物理页面  建立映射关系
-  return page_insert(dst_env->env_pgdir, dst_env->env_asid, page_pointer, dst_virtual_address, permission);
+  return page_insert(dst_env->env_pgdir, dst_env->env_asid, page, dst_virtual_address, permission);
 }
 
 /* Overview:
@@ -234,7 +235,7 @@ int sys_mem_unmap(u_int envid, u_int virtual_address) {
  *   - The new env's 'env_pri' is copied from 'curenv'.
  *   Returns the original error if underlying calls fail.
  */
-// 实现fork函数，创建一个子进程
+// 实现fork函数，创建当前进程的一个子进程
 int sys_exofork(void) {
   // 子进程的进程控制块
   struct Env *env;
@@ -242,11 +243,10 @@ int sys_exofork(void) {
   try(env_alloc(&env, curenv->env_id));
 
   // 复制父进程调用系统操作时的现场，并不一定等同于curenv->tf中的信息
-  // 需要注意这里不能使用 curenv->env_tf，因为 curenv->env_tf存储的是进程调度，是其他进程之前的tf
-  // 只有一处进行了env_tf的赋值。就是在env_run函数中。
+  // curenv->env_tf的栈帧还没有更新，只有一处进行了env_tf的赋值，是在env_run函数中
   env->env_tf = *((struct Trapframe *)KSTACKTOP - 1);
 
-  // 将返回值（子进程envid）设置为0：这里是在初始化子进程
+  // 将子进程的返回值（envid）设置为0
   env->env_tf.regs[2] = 0;
   // 还在进行初始化，设置为不可调度
   env->env_status = ENV_NOT_RUNNABLE;
@@ -347,6 +347,7 @@ void sys_panic(char *msg) {
  *   Return -E_INVAL: 'dst_virtual_address' is neither 0 nor a legal address.
  */
 // 进程间通信接收信息
+// 设置相应的握手信号，并将自身进程阻塞，等待发送进程发送完成
 int sys_ipc_recv(u_int dst_virtual_address) {
   // 检查地址是否合法
   if (dst_virtual_address != 0 && is_illegal_va(dst_virtual_address)) {
@@ -366,6 +367,7 @@ int sys_ipc_recv(u_int dst_virtual_address) {
   // 设置返回值：通过修改当前异常栈
   // 内核态->用户态的返回直接返回值受到一层状态转换的限制，需要通过栈帧实现
   ((struct Trapframe *)KSTACKTOP - 1)->regs[2] = 0;
+
   // 强制切换进程，让对方进程发送数据，直到接受到信息
   schedule(1);
 }
@@ -401,7 +403,7 @@ int sys_ipc_try_send(
     return -E_INVAL;
   }
 
-  // 获取**接受进程**的进程控制块
+  // 获取**接收进程**的进程控制块
   // 这里是唯一不查找父子关系的地方：发送是任意的，不要求父子关系
   try(envid2env(envid_receive, &env_receive, 0));
 
@@ -419,11 +421,6 @@ int sys_ipc_try_send(
   env_receive->env_ipc_perm = PTE_V | permission;
   // 置0表示接受到信息
   env_receive->env_ipc_recving = 0;
-
-  // 接收到了信息，取消接收进程的阻塞状态
-  env_receive->env_status = ENV_RUNNABLE;
-  // 如果进程被阻塞了，则不管，直到别的进程将被阻塞进程重新移入调度队列中
-  TAILQ_INSERT_TAIL(&env_sched_list, env_receive, env_sched_link);
 
   // 如果为0表示只传值，不用共享页面
   // 将当前进程的一个页面共享到接收进程，通过该页面获得发送进程发送的一些信息。
@@ -443,13 +440,19 @@ int sys_ipc_try_send(
           permission              // 接受方得到的 共享的内存的权限
         ));
   }
+
+  // 接收到了信息，取消接收进程的阻塞状态
+  env_receive->env_status = ENV_RUNNABLE;
+  // 如果进程被阻塞了，则不管，直到别的进程将被阻塞进程重新移入调度队列中
+  TAILQ_INSERT_TAIL(&env_sched_list, env_receive, env_sched_link);
+
   return 0;
 }
 
-// XXX: kernel does busy waiting here, blocking all envs
 // 读入一个字符，一切输入的起始
 int sys_cgetc(void) {
   int ch;
+  // 忙等待，阻塞所有进程，直到真正读入字符
   while ((ch = scancharc()) == 0) {}
   return ch;
 }
@@ -494,20 +497,24 @@ int sys_write_dev(u_int data_addr, u_int device_addr, u_int data_len) {
     return -E_INVAL;
   }
   // 检查设备地址合法性
-  if (!((0x180003f8 <= device_addr && device_addr + data_len <= 0x18000418) || 
+  if (!((0x180003f8 <= device_addr && device_addr + data_len <= 0x18000418) ||
         (0x180001f0 <= device_addr && device_addr + data_len <= 0x180001f8))) {
     return -E_INVAL;
   }
   // 判断数据长度是否满足要求
-  if (data_len == 1) {
-    iowrite8(*(uint8_t *)data_addr, device_addr);
-  } else if (data_len == 2) {
-    iowrite16(*(uint16_t *)data_addr, device_addr);
-  } else if (data_len == 4) {
-    iowrite32(*(uint32_t *)data_addr, device_addr);
-  } else {
-    return -E_INVAL;
+  switch (data_len) {
+    case 1:
+      iowrite8(*(uint8_t *)data_addr, device_addr);
+      break;
+    case 2:
+      iowrite16(*(uint16_t *)data_addr, device_addr);
+      break;
+    case 4:
+      iowrite32(*(uint32_t *)data_addr, device_addr);
+    default:
+      return -E_INVAL;
   }
+
   return 0;
 }
 
@@ -533,20 +540,26 @@ int sys_read_dev(u_int data_addr, u_int device_addr, u_int data_len) {
     return -E_INVAL;
   }
   // 检查设备地址合法性
-  if (!((0x180003f8 <= device_addr && device_addr + data_len <= 0x18000418) || 
+  if (!((0x180003f8 <= device_addr && device_addr + data_len <= 0x18000418) ||
         (0x180001f0 <= device_addr && device_addr + data_len <= 0x180001f8))) {
     return -E_INVAL;
   }
   // 判断数据长度是否满足要求
-  if (data_len == 1) {
-    *(uint8_t *)data_addr = ioread8(device_addr);
-  } else if (data_len == 2) {
-    *(uint16_t *)data_addr = ioread16(device_addr);
-  } else if (data_len == 4) {
-    *(uint32_t *)data_addr = ioread32(device_addr);
-  } else {
-    return -E_INVAL;
+  switch (data_len) {
+    case 1:
+      *(uint8_t *) data_addr = ioread8(device_addr);
+      break;
+    case 2:
+      *(uint16_t *)data_addr = ioread16(device_addr);
+      break;
+    case 4:
+      *(uint32_t *)data_addr = ioread32(device_addr);
+      break;
+    default:
+      return -E_INVAL;
+      break;
   }
+
 	return 0;
 }
 
@@ -627,7 +640,7 @@ void do_syscall(struct Trapframe *tf) {
 
   // 系统调用类型，用户态下的 $a0 寄存器为 regs[4]
   int syscall_type = tf->regs[4];
-  // 系统调用号不合理
+  // 如果系统调用号不合理
   if (syscall_type < 0 || syscall_type >= MAX_SYSNO) {
     tf->regs[2] = -E_NO_SYS;
     return;

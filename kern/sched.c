@@ -8,11 +8,6 @@
  * Post-Condition:
  *   If 'yield' is set (non-zero), 'curenv' should not be scheduled again unless it is the only
  *   runnable env.
- *
- * Hints:
- *   1. The variable 'count' used for counting slices should be defined as 'static'.
- *   2. Use variable 'env_sched_list', which contains and only contains all runnable envs.
- *   3. You shouldn't use any 'return' statement because this function is 'noreturn'.
  */
 // 参数表示是否强制让出当前进程的运行
 // - yield为1时：此时当前进程必须让出
@@ -25,30 +20,11 @@ void schedule(int yield) {
   static int count = 0;
   struct Env *env = curenv;
 
-  /* We always decrease the 'count' by 1.
-   *
-    * If 'yield' is set,
-    * or 'count' has been decreased to 0,
-    * or 'e' (previous 'curenv') is 'NULL',
-    * or 'e' is not runnable,
-   * then we pick up a new env from 'env_sched_list' (list of
-   * all runnable envs), set 'count' to its priority, and schedule it with 'env_run'.
-   * **Panic if that list is empty**.
-   *
-   * (Note that if 'e' is still a runnable env, we should move it to the tail of
-   * 'env_sched_list' before picking up another env from its head, or we will schedule the
-   * head env repeatedly.)
-   *
-   * Otherwise, we simply schedule 'e' again.
-   *
-   * You may want to use macros below:
-   *   'TAILQ_FIRST', 'TAILQ_REMOVE', 'TAILQ_INSERT_TAIL'
-   */
   // 是否需要切换进程
-  if (yield ||      // 强制切换：通过参数
-      count<=0 ||   // 当前进程分配时间片结束
-      env==NULL ||  // 当前无进程：刚初始化，切换一次进行分配
-      env->env_status!=ENV_RUNNABLE) {  // 当前进程被阻塞
+  if (yield ||        // 强制切换：通过参数
+      count <= 0 ||   // 当前进程分配时间片结束
+      env == NULL ||  // 当前无进程：刚初始化，切换一次进行分配
+      env->env_status != ENV_RUNNABLE) {  // 当前进程被阻塞
     if (env!=NULL) {
       // 从调度队列中移除当前进程
       TAILQ_REMOVE(&env_sched_list, env, env_sched_link);

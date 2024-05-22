@@ -34,12 +34,14 @@ timer_irq:
   j       schedule
 END(handle_int)
 
+# 常规的缺页中断
 BUILD_HANDLER tlb do_tlb_refill
 
 #if !defined(LAB) || LAB >= 4
 # 处理页写入异常的内核函数
 BUILD_HANDLER mod do_tlb_mod
-# 经过异常分发后，通过handle_sys，完成系统调用
+
+# 经过异常分发后，通过handle_sys，完成系统调用，见syscall_all.c
 # 参数为栈帧
 BUILD_HANDLER sys do_syscall
 #endif
