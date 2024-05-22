@@ -523,6 +523,9 @@ int sys_clone(void *func, void *child_stack) {
 
 	struct Env *env;
 	try(env_clone(&env, curenv->env_id));
+	struct Page *counter;
+	counter = page_lookup(curenv->env_pgdir, KSEG0, NULL);
+	counter->pp_ref++;
 
 	env->env_tf = *((struct Trapframe *)KSTACKTOP - 1);
 	env->env_tf.cp0_epc = func;

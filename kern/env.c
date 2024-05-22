@@ -313,10 +313,8 @@ int env_clone(struct Env **new, u_int parent_id) {
   env->env_parent_id = parent_id;
   // 设置进程的asid
   env->env_asid = parent_env->env_asid;
-	
- struct Page * counter_page;
- counter_page = page_lookup(parent_env->env_pgdir, KSEG0, NULL);
- counter_page->pp_ref++;
+  env->env_pgdir = parent_env->env_pgdir;
+
 
   // 设置进程相关的属性
   // -IE：中断是否开启
@@ -479,8 +477,8 @@ void env_free(struct Env *env) {
   }
 
   	  page_decref(pa2page(PADDR(env->env_pgdir)));
-  asid_free(env->env_asid);
-  tlb_invalidate(env->env_asid, UVPT + (PDX(UVPT) << PGSHIFT));
+  	asid_free(env->env_asid);
+  	tlb_invalidate(env->env_asid, UVPT + (PDX(UVPT) << PGSHIFT));
   }
   else {
 	  counter_page->pp_ref--;
