@@ -528,7 +528,7 @@ int sys_clone(void *func, void *child_stack) {
 	counter->pp_ref++;
 
 	env->env_tf = *((struct Trapframe *)KSTACKTOP - 1);
-	env->env_tf.cp0_epc = func;
+	env->env_tf.regs[31] = func;
 	env->env_tf.regs[29] = child_stack;
 
 	// 将子进程的返回值（envid）设置为0

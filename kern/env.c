@@ -315,7 +315,6 @@ int env_clone(struct Env **new, u_int parent_id) {
   env->env_asid = parent_env->env_asid;
   env->env_pgdir = parent_env->env_pgdir;
 
-
   // 设置进程相关的属性
   // -IE：中断是否开启
   // -IM7：7 号中断（时钟中断）是否可以被响应
