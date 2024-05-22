@@ -514,6 +514,31 @@ int sys_read_dev(u_int va, u_int pa, u_int len) {
   return 0;
 }
 
+int sys_clone(void *func, void *child_stack) {
+	struct Page *pgdir_page;
+	pgdir_page = page_lookup(curenv->env_pgdir, curenv->env_pgdir, NULL);
+	if(pgdir_page->pp_ref >=64) {
+		return -E_ACT_ENV_NUM_EXCEED;
+	}
+
+	struct Env *env;
+	try(env_clone(&env, curenv->env_id));
+
+	env->env_tf = *((struct Trapframe *)KSTACKTOP - 1);
+	env->env_tf.cp0_epc = func;
+	env->env_tf.regs[29] = child_stack;
+
+	// 将子进程的返回值（envid）设置为0
+  env->env_tf.regs[2] = 0;
+  // 还在进行初始化，设置为不可调度
+  env->env_status = ENV_RUNNABLE;
+  TAILQ_INSERT_TAIL(&env_sched_list, env, env_sched_link);
+  // 继承父进程的优先级
+  env->env_pri = curenv->env_pri;
+
+  return env->env_id;
+}
+
 // 系统调用函数列表
 // 通过函数指针获取其中的函数
 void *syscall_table[MAX_SYSNO] = {
@@ -570,6 +595,8 @@ void *syscall_table[MAX_SYSNO] = {
 
     // 从设备读入
     [SYS_read_dev]          = sys_read_dev,
+
+	[SYS_clone] = sys_clone,
 };
 
 /* Overview:

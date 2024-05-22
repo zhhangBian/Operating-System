@@ -192,7 +192,7 @@ static int env_setup_vm(struct Env *env) {
   // 为进程创建页表
   struct Page *page_for_pde;
   try(page_alloc(&page_for_pde));
-  page_for_pde->pp_ref++;
+  page_for_pde->pp_ref = 1;
   env->env_pgdir=(Pde*)page2kva(page_for_pde);
 
   // 将模板页目录中  UUTOP到UVPT的虚拟地址空间  对应的页表项复制到该新页中
@@ -269,6 +269,52 @@ int env_alloc(struct Env **new, u_int parent_id) {
    * recovery. Additionally, set UM to 1 so that when ERET unsets EXL, the processor
    * transitions to user mode.
    */
+  // -IE：中断是否开启
+  // -IM7：7 号中断（时钟中断）是否可以被响应
+  // - 当且仅当EXL被设置为0且UM 被设置为1时，处理器处于用户模式
+  // - 其它所有情况下，处理器均处于内核模式下
+  // - 栈寄存器是第29号寄存器，是用户栈，不是内核栈
+  env->env_tf.cp0_status = STATUS_IM7 | STATUS_IE | STATUS_EXL | STATUS_UM;
+  // Reserve space for 'argc' and 'argv'.
+  env->env_tf.regs[29] = USTACKTOP - sizeof(int) - sizeof(char **);
+
+  // 如果上述操作都成功，则从空闲进程链表中移除该进程块
+  LIST_REMOVE(env, env_link);
+  *new = env;
+
+  return 0;
+}
+
+int env_clone(struct Env **new, u_int parent_id) {
+  int func_info;
+  struct Env *env;
+
+  // 获取一个空闲进程控制块
+  if (LIST_EMPTY(&env_free_list)) {
+    return -E_NO_FREE_ENV;
+  }
+  env = LIST_FIRST(&env_free_list);
+
+  // 初始化新进程的虚拟地址空间
+  // 设置UENS到页表起始地址的映射相同
+
+  struct Env *parent_env;
+  envid2env(parent_id, &parent_env, 0);
+
+  env->env_user_tlb_mod_entry = 0;  // for lab4
+  env->env_runs = 0;	              // for lab6
+  // 设置进程的id
+  env->env_id = mkenvid(env);
+  // 设置进程的父进程id
+  env->env_parent_id = parent_id;
+  // 设置进程的asid
+  env->env_asid = parent_env->env_asid;
+	
+ struct Page * page;
+ page = page_lookup(parent_env->env_pgdir, parent_env->env_pgdir, NULL);
+ page_insert(env->env_pgdir, parent_env->env_asid, page, parent_env->env_pgdir, PTE_V);
+
+  // 设置进程相关的属性
   // -IE：中断是否开启
   // -IM7：7 号中断（时钟中断）是否可以被响应
   // - 当且仅当EXL被设置为0且UM 被设置为1时，处理器处于用户模式
@@ -418,14 +464,18 @@ void env_free(struct Env *env) {
     }
     /* Hint: free the page table itself. */
     env->env_pgdir[pde_i] = 0;
-    page_decref(pa2page(physical_address));
+	page_decref(pa2page(physical_address));
     /* Hint: invalidate page table in TLB */
     tlb_invalidate(env->env_asid, UVPT + (pde_i << PGSHIFT));
   }
-  /* Hint: free the page directory. */
-  page_decref(pa2page(PADDR(env->env_pgdir)));
-  /* Hint: free the ASID */
-  asid_free(env->env_asid);
+
+
+  struct Page *page = pa2page(PADDR(env->env_pgdir));
+  page_decref(page);
+  if(page->pp_ref==0) {
+  	asid_free(env->env_asid);
+  }
+
   /* Hint: invalidate page directory in TLB */
   tlb_invalidate(env->env_asid, UVPT + (PDX(UVPT) << PGSHIFT));
   /* Hint: return the environment to the free list. */
