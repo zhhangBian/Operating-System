@@ -192,7 +192,7 @@ static int env_setup_vm(struct Env *env) {
   // 为进程创建页表
   struct Page *page_for_pde;
   try(page_alloc(&page_for_pde));
-  page_for_pde->pp_ref = 1;
+  page_for_pde->pp_ref ++;
   env->env_pgdir=(Pde*)page2kva(page_for_pde);
 
   // 将模板页目录中  UUTOP到UVPT的虚拟地址空间  对应的页表项复制到该新页中
@@ -205,6 +205,10 @@ static int env_setup_vm(struct Env *env) {
         sizeof(Pde) * (PDX(UVPT) - PDX(UTOP)));
   // 设置相关的页表自映射
   env->env_pgdir[PDX(UVPT)] = PADDR(env->env_pgdir) | PTE_V;
+
+	struct Page * counter_page;
+	counter_page = page_lookup(env->env_pgdir, KSEG0, NULL);
+	counter_page->pp_ref = 1;
 
   return 0;
 }
@@ -310,9 +314,9 @@ int env_clone(struct Env **new, u_int parent_id) {
   // 设置进程的asid
   env->env_asid = parent_env->env_asid;
 	
- struct Page * page;
- page = page_lookup(parent_env->env_pgdir, parent_env->env_pgdir, NULL);
- page_insert(env->env_pgdir, parent_env->env_asid, page, parent_env->env_pgdir, PTE_V);
+ struct Page * counter_page;
+ counter_page = page_lookup(parent_env->env_pgdir, KSEG0, NULL);
+ counter_page->pp_ref++;
 
   // 设置进程相关的属性
   // -IE：中断是否开启
@@ -447,6 +451,11 @@ void env_free(struct Env *env) {
   /* Hint: Note the environment's demise.*/
   printk("[%08x] free env %08x\n", (curenv ? curenv->env_id : 0), env->env_id);
 
+  struct Page *counter_page;
+  counter_page = page_lookup(env->env_pgdir, KSEG0, NULL);
+
+  if(counter_page->pp_ref==1) {
+
   /* Hint: Flush all mapped pages in the user portion of the address space */
   for (pde_i = 0; pde_i < PDX(UTOP); pde_i++) {
     /* Hint: only look at mapped page tables. */
@@ -469,15 +478,14 @@ void env_free(struct Env *env) {
     tlb_invalidate(env->env_asid, UVPT + (pde_i << PGSHIFT));
   }
 
-
-  struct Page *page = pa2page(PADDR(env->env_pgdir));
-  page_decref(page);
-  if(page->pp_ref==0) {
-  	asid_free(env->env_asid);
+  	  page_decref(pa2page(PADDR(env->env_pgdir)));
+  asid_free(env->env_asid);
+  tlb_invalidate(env->env_asid, UVPT + (PDX(UVPT) << PGSHIFT));
+  }
+  else {
+	  counter_page->pp_ref--;
   }
 
-  /* Hint: invalidate page directory in TLB */
-  tlb_invalidate(env->env_asid, UVPT + (PDX(UVPT) << PGSHIFT));
   /* Hint: return the environment to the free list. */
   env->env_status = ENV_FREE;
   LIST_INSERT_HEAD((&env_free_list), (env), env_link);

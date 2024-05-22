@@ -516,7 +516,7 @@ int sys_read_dev(u_int va, u_int pa, u_int len) {
 
 int sys_clone(void *func, void *child_stack) {
 	struct Page *pgdir_page;
-	pgdir_page = page_lookup(curenv->env_pgdir, curenv->env_pgdir, NULL);
+	pgdir_page = page_lookup(curenv->env_pgdir, KSEG0, NULL);
 	if(pgdir_page->pp_ref >=64) {
 		return -E_ACT_ENV_NUM_EXCEED;
 	}
