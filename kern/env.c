@@ -114,12 +114,12 @@ int envid2env(u_int envid, struct Env **env_wanted, int check_if_parent) {
 
   // 分配envid时不会为0，用0代表直接获取当前的进程块
   if (envid == 0) {
-		*env_wanted = curenv;
-		return 0;
-	} 
+    *env_wanted = curenv;
+    return 0;
+  } 
   
   // 获取进程控制块，envid低10位是数组的索引
-	env = envs + ENVX(envid);
+  env = envs + ENVX(envid);
 
   // 检查当前进程是否可以被使用
   if (env->env_status == ENV_FREE ||  // 进程被回收
@@ -192,7 +192,7 @@ static int env_setup_vm(struct Env *env) {
   // 为进程创建页表
   struct Page *page_for_pde;
   try(page_alloc(&page_for_pde));
-  page_for_pde->pp_ref ++;
+  page_for_pde->pp_ref++;
   env->env_pgdir=(Pde*)page2kva(page_for_pde);
 
   // 将模板页目录中  UUTOP到UVPT的虚拟地址空间  对应的页表项复制到该新页中
@@ -205,10 +205,6 @@ static int env_setup_vm(struct Env *env) {
         sizeof(Pde) * (PDX(UVPT) - PDX(UTOP)));
   // 设置相关的页表自映射
   env->env_pgdir[PDX(UVPT)] = PADDR(env->env_pgdir) | PTE_V;
-
-	struct Page * counter_page;
-	counter_page = page_lookup(env->env_pgdir, KSEG0, NULL);
-	counter_page->pp_ref = 1;
 
   return 0;
 }
@@ -314,6 +310,7 @@ int env_clone(struct Env **new, u_int parent_id) {
   // 设置进程的asid
   env->env_asid = parent_env->env_asid;
   env->env_pgdir = parent_env->env_pgdir;
+  (pa2page(PADDR(parent_env->env_pgdir))->pp_ref)++;
 
   // 设置进程相关的属性
   // -IE：中断是否开启
@@ -448,39 +445,35 @@ void env_free(struct Env *env) {
   /* Hint: Note the environment's demise.*/
   printk("[%08x] free env %08x\n", (curenv ? curenv->env_id : 0), env->env_id);
 
-  struct Page *counter_page;
-  counter_page = page_lookup(env->env_pgdir, KSEG0, NULL);
-
-  if(counter_page->pp_ref==1) {
-
-  /* Hint: Flush all mapped pages in the user portion of the address space */
-  for (pde_i = 0; pde_i < PDX(UTOP); pde_i++) {
-    /* Hint: only look at mapped page tables. */
-    if (!(env->env_pgdir[pde_i] & PTE_V)) {
-      continue;
-    }
-    /* Hint: find the pa and va of the page table. */
-    physical_address = PTE_ADDR(env->env_pgdir[pde_i]);
-    pte = (Pte *)KADDR(physical_address);
-    /* Hint: Unmap all PTEs in this page table. */
-    for (pte_i = 0; pte_i <= PTX(~0); pte_i++) {
-      if (pte[pte_i] & PTE_V) {
-        page_remove(env->env_pgdir, env->env_asid, (pde_i << PDSHIFT) | (pte_i << PGSHIFT));
+  if(pa2page(PADDR(env->env_pgdir))->pp_ref==1) {
+    /* Hint: Flush all mapped pages in the user portion of the address space */
+    for (pde_i = 0; pde_i < PDX(UTOP); pde_i++) {
+      /* Hint: only look at mapped page tables. */
+      if (!(env->env_pgdir[pde_i] & PTE_V)) {
+        continue;
       }
+      /* Hint: find the pa and va of the page table. */
+      physical_address = PTE_ADDR(env->env_pgdir[pde_i]);
+      pte = (Pte *)KADDR(physical_address);
+      /* Hint: Unmap all PTEs in this page table. */
+      for (pte_i = 0; pte_i <= PTX(~0); pte_i++) {
+        if (pte[pte_i] & PTE_V) {
+          page_remove(env->env_pgdir, env->env_asid, (pde_i << PDSHIFT) | (pte_i << PGSHIFT));
+        }
+      }
+      /* Hint: free the page table itself. */
+      env->env_pgdir[pde_i] = 0;
+      page_decref(pa2page(physical_address));
+      /* Hint: invalidate page table in TLB */
+      tlb_invalidate(env->env_asid, UVPT + (pde_i << PGSHIFT));
     }
-    /* Hint: free the page table itself. */
-    env->env_pgdir[pde_i] = 0;
-	page_decref(pa2page(physical_address));
-    /* Hint: invalidate page table in TLB */
-    tlb_invalidate(env->env_asid, UVPT + (pde_i << PGSHIFT));
-  }
 
-  	  page_decref(pa2page(PADDR(env->env_pgdir)));
-  	asid_free(env->env_asid);
-  	tlb_invalidate(env->env_asid, UVPT + (PDX(UVPT) << PGSHIFT));
+    page_decref(pa2page(PADDR(env->env_pgdir)));
+    asid_free(env->env_asid);
+    tlb_invalidate(env->env_asid, UVPT + (PDX(UVPT) << PGSHIFT));
   }
   else {
-	  counter_page->pp_ref--;
+    pa2page(PADDR(env->env_pgdir))->pp_ref--;
   }
 
   /* Hint: return the environment to the free list. */
