@@ -38,4 +38,7 @@ void strace_recv() {
 		recv_sysno(send_id, sysno);
 		syscall_set_env_status(send_id, ENV_RUNNABLE);
 	}
+	strace_barrier(send_id);
+	recv_sysno(send_id, sysno);
+	syscall_set_env_status(send_id, ENV_RUNNABLE);
 }
