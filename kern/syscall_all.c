@@ -276,15 +276,19 @@ int sys_set_env_status(u_int envid, u_int status) {
   // 获取进程控制块
   try(envid2env(envid, &env, 1));
 
-  // 将进程从对应的队列中进行操作
-  // 如果设置为不运行且当前在运行，则移出调度队列
-  if (status == ENV_NOT_RUNNABLE && env->env_status != ENV_NOT_RUNNABLE) {
-    TAILQ_REMOVE(&env_sched_list, env, env_sched_link);
-  }
-  // 如果设置为运行且当前不在运行，则加入调度队列
-  else if (status == ENV_RUNNABLE && env->env_status != ENV_RUNNABLE) {
+  if (status == ENV_RUNNABLE && env->env_status != ENV_RUNNABLE) {
     TAILQ_INSERT_TAIL(&env_sched_list, env, env_sched_link);
-  }
+} else if (status == ENV_NOT_RUNNABLE && env->env_status != ENV_NOT_RUNNABLE) {
+    TAILQ_REMOVE(&env_sched_list, env, env_sched_link);
+    if(env == curenv) {
+        env->env_status = status;
+        schedule(1);
+        // no return
+    }
+}
+
+
+
   // 设置进程的状态
   env->env_status = status;
   return 0;

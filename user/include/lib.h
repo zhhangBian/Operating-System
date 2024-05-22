@@ -17,6 +17,16 @@
 // 获取页控制块管理数组的起始地址
 #define pages ((const volatile struct Page *)UPAGES)
 
+extern volatile int straced;
+#define STRACE_MAX_RECV 1024
+extern int strace_recv_sysno[STRACE_MAX_RECV], strace_recv_child[STRACE_MAX_RECV];
+extern int strace_recv_cnt;
+void recv_sysno(u_int child, int sysno);
+
+void strace_send(int sysno);
+void strace_recv();
+
+
 // libos
 void exit(void) __attribute__((noreturn));
 

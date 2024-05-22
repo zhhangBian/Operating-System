@@ -133,7 +133,8 @@ int fork(void) {
   // 如果是子进程，涉及函数调用，会修改用户栈
   // 初始创建子进程后，子进程处于阻塞状态，等待父进程进行调度
   if (fork_back_envid == 0) {
-    // 将env指针指向自身进程控制块：根据id得到，之前还指向父进程
+	straced = 0;
+	  // 将env指针指向自身进程控制块：根据id得到，之前还指向父进程
     env = envs + ENVX(syscall_getenvid());
     return 0;
   }
