@@ -75,7 +75,8 @@ void write_block(u_int block_no) {
     user_panic("write unmapped block %08x", block_no);
   }
   // 将磁盘块的数据写回磁盘0中
-  ide_write(0, block_no * SECT2BLK, disk_addr(block_no), SECT2BLK);
+  void *virtual_address = disk_addr(block_no)
+  ide_write(0, block_no * SECT2BLK, virtual_address, SECT2BLK);
 }
 
 // Overview:
