@@ -6,6 +6,7 @@
 // File nodes (both in-memory and on-disk)
 
 // Bytes per file system block - same as page size
+// 磁盘块的大小，单位为字节
 #define BLOCK_SIZE PAGE_SIZE
 #define BLOCK_SIZE_BIT (BLOCK_SIZE * 8)
 
@@ -23,19 +24,21 @@
 
 #define FILE_STRUCT_SIZE 256
 
+// 文件控制块
 struct File {
   // 文件名，最大长度为128
   char f_name[MAXNAMELEN];
   // 文件大小，单位为字节
   uint32_t f_size;
-  // 文件类型，有普通文件 FTYPE_REG 和目录 FTYPE_DIR 两种。
+  // 文件类型，有普通文件FTYPE_REG和目录FTYPE_DIR两种。
   uint32_t f_type;
-  // 文件的直接指针，用来记录文件的数据块在磁盘上的位置
+  // 文件的直接指针，用来记录存储文件的磁盘块
+  // 最多有10个指针，每个磁盘块大小为4KB，故文件最大为40KB
   uint32_t f_direct[NDIRECT];
-  // 指向一个间接磁盘块，用来存储指向文件内容的磁盘块的指针
+  // 指向一个间接磁盘块，用来存储  指向文件内容的磁盘块的指针
+  // 在文件大小超过40KB时使用，共1024个指针，但不使用前10个指针
   uint32_t f_indirect;
   // 指向文件所属的文件目录
-  // the pointer to the dir where this file is in, valid only in memory.
   struct File *f_dir;
   // 为了让整数个文件结构体占用一个磁盘块，填充结构体中剩下的字节
   char f_pad[FILE_STRUCT_SIZE - MAXNAMELEN - (3 + NDIRECT) * 4 - sizeof(void *)];
@@ -51,15 +54,13 @@ struct File {
 
 #define FS_MAGIC 0x68286097 // Everyone's favorite OS class
 
+// 超级块，用于描述文件系统的基本信息，如Magic Number、磁盘大小以及根目录的位置。
 struct Super {
   // 魔数，用于标识该文件系统。
-  // Magic number: FS_MAGIC
   uint32_t s_magic;
   // 记录本文件系统有多少个磁盘块，本文件系统中为1024
-  // Total number of blocks on disk
   uint32_t s_nblocks;
-  // 根目录，其f_type为FTYPE_DIR，f_name为 “/”
-  // Root directory node
+  // 根目录节点，根目录的f_type为FTYPE_DIR，f_name为 “/”
   struct File s_root;
 };
 

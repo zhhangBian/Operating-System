@@ -457,6 +457,11 @@ int sys_cgetc(void) {
   return ch;
 }
 
+#define CONSOLE_BEGIN (0x180003f8)
+#define CONSOLE_END (0x180003f8 + 0x20)
+#define IDE_BEGIN (0x180001f0)
+#define IDE_END (0x180001f0 + 0x8)
+
 /* Overview:
  *  This function is used to write data at 'va' with length 'len' to a device physical address
  *  'pa'. Remember to check the validity of 'va' and 'pa' (see Hint below);
@@ -472,13 +477,6 @@ int sys_cgetc(void) {
  *  Data within [va, va+len) is copied to the physical address 'pa'.
  *  Return 0 on success.
  *  Return -E_INVAL on bad address.
- *
- * Hint:
- *  You can use 'is_illegal_va_range' to validate 'va'.
- *  You may use the unmapped and uncached segment in kernel address space (KSEG1)
- *  to perform MMIO by assigning a corresponding-lengthed data to the address,
- *  or you can just simply use the io function defined in 'include/io.h',
- *  such as 'iowrite32', 'iowrite16' and 'iowrite8'.
  *
  *  All valid device and their physical address ranges:
  *	* ---------------------------------*
@@ -497,8 +495,8 @@ int sys_write_dev(u_int data_addr, u_int device_addr, u_int data_len) {
     return -E_INVAL;
   }
   // 检查设备地址合法性
-  if (!((0x180003f8 <= device_addr && device_addr + data_len <= 0x18000418) ||
-        (0x180001f0 <= device_addr && device_addr + data_len <= 0x180001f8))) {
+  if (!((CONSOLE_BEGIN <= device_addr && device_addr + data_len <= CONSOLE_END) ||
+        (IDE_BEGIN <= device_addr && device_addr + data_len <= IDE_END))) {
     return -E_INVAL;
   }
   // 判断数据长度是否满足要求
@@ -528,10 +526,6 @@ int sys_write_dev(u_int data_addr, u_int device_addr, u_int data_len) {
  *  Data at 'pa' is copied from device to [va, va+len).
  *  Return 0 on success.
  *  Return -E_INVAL on bad address.
- *
- * Hint:
- *  You can use 'is_illegal_va_range' to validate 'va'.
- *  You can use function 'ioread32', 'ioread16' and 'ioread8' to read data from device.
  */
 // 从设备读入
 int sys_read_dev(u_int data_addr, u_int device_addr, u_int data_len) {
@@ -540,8 +534,8 @@ int sys_read_dev(u_int data_addr, u_int device_addr, u_int data_len) {
     return -E_INVAL;
   }
   // 检查设备地址合法性
-  if (!((0x180003f8 <= device_addr && device_addr + data_len <= 0x18000418) ||
-        (0x180001f0 <= device_addr && device_addr + data_len <= 0x180001f8))) {
+  if (!((CONSOLE_BEGIN <= device_addr && device_addr + data_len <= CONSOLE_END) ||
+        (IDE_BEGIN <= device_addr && device_addr + data_len <= IDE_END))) {
     return -E_INVAL;
   }
   // 判断数据长度是否满足要求
@@ -560,7 +554,7 @@ int sys_read_dev(u_int data_addr, u_int device_addr, u_int data_len) {
       break;
   }
 
-	return 0;
+  return 0;
 }
 
 // 系统调用函数列表
@@ -624,12 +618,6 @@ void *syscall_table[MAX_SYSNO] = {
 /* Overview:
  *   Call the function in 'syscall_table' indexed at 'syscall_type' with arguments from user context and
  * stack.
- *
- * Hint:
- *   Use syscall_type from $a0 to dispatch the syscall.
- *   The possible arguments are stored at $a1, $a2, $a3, [$sp + 16 bytes], [$sp + 20 bytes] in
- *   order.
- *   Number of arguments cannot exceed 5.
  */
 // 调用函数时将栈指针作为参数传递
 // 在中断后在entry.S中通过SAVE_ALL保护线程，借助这个栈帧获得用户态信息

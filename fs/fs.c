@@ -10,14 +10,14 @@ int block_is_free(u_int);
 
 // Overview:
 //  Return the virtual address of this disk block in cache.
-// Hint: Use 'DISKMAP' and 'BLOCK_SIZE' to calculate the address.
-void *disk_addr(u_int blockno) {
-  /* Exercise 5.6: Your code here. */
-  return DISKMAP + blockno * BLOCK_SIZE;
+// 获取磁盘块号映射在虚存中的地址
+void *disk_addr(u_int block_no) {
+  return DISKMAP + block_no * BLOCK_SIZE;
 }
 
 // Overview:
 //  Check if this virtual address is mapped to a block. (check PTE_V bit)
+// 检查虚拟地址是否已经存在映射关系，本质是在检查页表是否有效
 int va_is_mapped(void *va) {
   return (vpd[PDX(va)] & PTE_V) && (vpt[VPN(va)] & PTE_V);
 }
@@ -25,11 +25,15 @@ int va_is_mapped(void *va) {
 // Overview:
 //  Check if this disk block is mapped in cache.
 //  Returns the virtual address of the cache page if mapped, 0 otherwise.
-void *block_is_mapped(u_int blockno) {
-  void *va = disk_addr(blockno);
-  if (va_is_mapped(va)) {
-    return va;
+// 检查磁盘是否已经在内存中分配了内存块
+void *block_is_mapped(u_int block_no) {
+  // 获取磁盘块在内存中对应的虚拟地址
+  void *virtual_address = disk_addr(block_no);
+  // 如果已经存在映射关系，则返回相应的虚拟地址
+  if (va_is_mapped(virtual_address)) {
+    return virtual_address;
   }
+
   return NULL;
 }
 
@@ -41,15 +45,15 @@ int va_is_dirty(void *va) {
 
 // Overview:
 //  Check if this block is dirty. (check corresponding `va`)
-int block_is_dirty(u_int blockno) {
-  void *va = disk_addr(blockno);
+int block_is_dirty(u_int block_no) {
+  void *va = disk_addr(block_no);
   return va_is_mapped(va) && va_is_dirty(va);
 }
 
 // Overview:
 //  Mark this block as dirty (cache page has changed and needs to be written back to disk).
-int dirty_block(u_int blockno) {
-  void *va = disk_addr(blockno);
+int dirty_block(u_int block_no) {
+  void *va = disk_addr(block_no);
 
   if (!va_is_mapped(va)) {
     return -E_NOT_FOUND;
@@ -64,15 +68,14 @@ int dirty_block(u_int blockno) {
 
 // Overview:
 //  Write the current contents of the block out to disk.
-void write_block(u_int blockno) {
-  // Step 1: detect is this block is mapped, if not, can't write it's data to disk.
-  if (!block_is_mapped(blockno)) {
-    user_panic("write unmapped block %08x", blockno);
+// 将在内存中的数据写回磁盘
+void write_block(u_int block_no) {
+  // 检查是否为磁盘块在内存中分配了空间
+  if (!block_is_mapped(block_no)) {
+    user_panic("write unmapped block %08x", block_no);
   }
-
-  // Step2: write data to IDE disk. (using ide_write, and the diskno is 0)
-  void *va = disk_addr(blockno);
-  ide_write(0, blockno * SECT2BLK, va, SECT2BLK);
+  // 将磁盘块的数据写回磁盘0中
+  ide_write(0, block_no * SECT2BLK, disk_addr(block_no), SECT2BLK);
 }
 
 // Overview:
@@ -87,102 +90,94 @@ void write_block(u_int blockno) {
 //  to 1 if the block was loaded off disk to satisfy this request. (Isnew
 //  lets callers like file_get_block clear any memory-only fields
 //  from the disk blocks when they come in off disk.)
-//
-// Hint:
-//  use disk_addr, block_is_mapped, syscall_mem_alloc, and ide_read.
-int read_block(u_int blockno, void **blk, u_int *isnew) {
-  // Step 1: validate blockno. Make file the block to read is within the disk.
-  if (super && blockno >= super->s_nblocks) {
-    user_panic("reading non-existent block %08x\n", blockno);
+
+// 将指定编号的磁盘块读入到内存中，自动处理原先未分配物理内存的情况
+int read_block(u_int block_no,  // 读取的磁盘块的块号
+               void **block_va_pointer, // 记录磁盘块在虚拟内存的地址，NULL则不记录
+               u_int *if_not_mapped_before  // 记录原先是否已经被读入内存，NULL则不记录
+  ) {
+  // 检查磁盘块号是否合法
+  if (super && block_no >= super->s_nblocks) {
+    user_panic("reading non-existent block %08x\n", block_no);
   }
 
-  // Step 2: validate this block is used, not free.
-  // Hint:
-  //  If the bitmap is NULL, indicate that we haven't read bitmap from disk to memory
-  //  until now. So, before we check if a block is free using `block_is_free`, we must
-  //  ensure that the bitmap blocks are already read from the disk to memory.
-  if (bitmap && block_is_free(blockno)) {
-    user_panic("reading free block %08x\n", blockno);
+  // 检查位图是否从磁盘被读取到了内存中，并检查磁盘块是否被使用，还是空闲状态
+  if (bitmap && block_is_free(block_no)) {
+    user_panic("reading free block %08x\n", block_no);
   }
 
-  // Step 3: transform block number to corresponding virtual address.
-  void *va = disk_addr(blockno);
+  // 获取磁盘块在虚拟内存中的相应地址
+  void *virtual_address = disk_addr(block_no);
 
-  // Step 4: read disk and set *isnew.
-  // Hint:
-  //  If this block is already mapped, just set *isnew, else alloc memory and
-  //  read data from IDE disk (use `syscall_mem_alloc` and `ide_read`).
-  //  We have only one IDE disk, so the diskno of ide_read should be 0.
-  if (block_is_mapped(blockno)) { // the block is in memory
-    if (isnew) {
-      *isnew = 0;
+  // 如果磁盘块原先已经被读入内存
+  if (block_is_mapped(block_no)) {
+    if (if_not_mapped_before) {
+      *if_not_mapped_before = 0;
     }
-  } else { // the block is not in memory
-    if (isnew) {
-      *isnew = 1;
+  }
+  // 如果没有，则分配内存，从磁盘中读取数据
+  else {
+    if (if_not_mapped_before) {
+      *if_not_mapped_before = 1;
     }
-    try(syscall_mem_alloc(0, va, PTE_D));
-    ide_read(0, blockno * SECT2BLK, va, SECT2BLK);
+    // 分配物理内存
+    try(syscall_mem_alloc(0, virtual_address, PTE_D));
+    // 从磁盘中读取数据
+    ide_read(0, block_no * SECT2BLK, virtual_address, SECT2BLK);
   }
 
-  // Step 5: if blk != NULL, assign 'va' to '*blk'.
-  if (blk) {
-    *blk = va;
+  // 记录磁盘块在虚拟内存的地址
+  if (block_va_pointer) {
+    *block_va_pointer = virtual_address;
   }
   return 0;
 }
 
 // Overview:
 //  Allocate a page to cache the disk block.
-int map_block(u_int blockno) {
-  // Step 1: If the block is already mapped in cache, return 0.
-  // Hint: Use 'block_is_mapped'.
-  /* Exercise 5.7: Your code here. (1/5) */
-  if (block_is_mapped(blockno)) {
+// 为磁盘块在内存中分配物理内存，建立映射
+int map_block(u_int block_no) {
+  // 检查是否已经建立了映射
+  if (block_is_mapped(block_no)) {
     return 0;
   }
 
-  // Step 2: Alloc a page in permission 'PTE_D' via syscall.
-  // Hint: Use 'disk_addr' for the virtual address.
-  /* Exercise 5.7: Your code here. (2/5) */
-  try(syscall_mem_alloc(env->env_id, disk_addr(blockno), PTE_D));
+  // 为磁盘在内存中分配物理内存，权限设置为可写
+  try(syscall_mem_alloc(env->env_id, disk_addr(block_no), PTE_D));
 }
 
 // Overview:
 //  Unmap a disk block in cache.
-void unmap_block(u_int blockno) {
+// 取消原先给磁盘分配的物理内存
+void unmap_block(u_int block_no) {
   // Step 1: Get the mapped address of the cache page of this block using 'block_is_mapped'.
-  void *va;
-  /* Exercise 5.7: Your code here. (3/5) */
-  va = block_is_mapped(blockno);
+  void *virtual_address;
+  virtual_address = block_is_mapped(block_no);
 
-  // Step 2: If this block is used (not free) and dirty in cache, write it back to the disk
-  // first.
-  // Hint: Use 'block_is_free', 'block_is_dirty' to check, and 'write_block' to sync.
-  /* Exercise 5.7: Your code here. (4/5) */
-  if (!block_is_free(blockno) && block_is_dirty(blockno)) {
-    write_block(blockno);
+  // 如果磁盘被使用，并且相应数据被修改，先将修改数据写回磁盘
+  if (!block_is_free(block_no) && block_is_dirty(block_no)) {
+    write_block(block_no);
   }
 
-  // Step 3: Unmap the virtual address via syscall.
-  /* Exercise 5.7: Your code here. (5/5) */
-  syscall_mem_unmap(env->env_id, disk_addr(blockno));
-
-  user_assert(!block_is_mapped(blockno));
+  // 通过系统调用取消原先的映射关系
+  syscall_mem_unmap(env->env_id, disk_addr(block_no));
+  // 检查是否真的已经取消了映射关系
+  user_assert(!block_is_mapped(block_no));
 }
 
 // Overview:
-//  Check if the block 'blockno' is free via bitmap.
+//  Check if the block 'block_no' is free via bitmap.
 //
 // Post-Condition:
 //  Return 1 if the block is free, else 0.
 // 根据位图来判断指定的磁盘块是否被占用
-int block_is_free(u_int blockno) {
-  if (super == 0 || blockno >= super->s_nblocks) {
+int block_is_free(u_int block_no) {
+  // 判断磁盘块号是否合法
+  if (super == 0 || block_no >= super->s_nblocks) {
     return 0;
   }
-
-  if (bitmap[blockno / 32] & (1 << (blockno % 32))) {
+  // 位图为1代表空闲
+  if (bitmap[block_no / 32] & (1 << (block_no % 32))) {
     return 1;
   }
 
@@ -191,18 +186,15 @@ int block_is_free(u_int blockno) {
 
 // Overview:
 //  Mark a block as free in the bitmap.
-void free_block(u_int blockno) {
-  // You can refer to the function 'block_is_free' above.
-  // Step 1: If 'blockno' is invalid (0 or >= the number of blocks in 'super'), return.
-  /* Exercise 5.4: Your code here. (1/2) */
-  if (super == 0 || blockno >= super->s_nblocks) {
+// 通过位图设置一个磁盘块为空闲
+void free_block(u_int block_no) {
+  // 判断磁盘块号是否合法
+  if (super == 0 || block_no >= super->s_nblocks) {
     return;
   }
 
-  // Step 2: Set the flag bit of 'blockno' in 'bitmap'.
-  // Hint: Use bit operations to update the bitmap, such as b[n / W] |= 1 << (n % W).
-  /* Exercise 5.4: Your code here. (2/2) */
-  bitmap[blockno / 32] |= 1 << (blockno % 32);
+  // 设置位图为1，将磁盘块标记为空闲
+  bitmap[block_no / 32] |= 1 << (block_no % 32);
 }
 
 // Overview:
@@ -212,14 +204,14 @@ void free_block(u_int blockno) {
 //  Return block number allocated on success,
 //  Return -E_NO_DISK if we are out of blocks.
 int alloc_block_num(void) {
-  int blockno;
+  int block_no;
   // walk through this bitmap, find a free one and mark it as used, then sync
   // this block to IDE disk (using `write_block`) from memory.
-  for (blockno = 3; blockno < super->s_nblocks; blockno++) {
-    if (bitmap[blockno / 32] & (1 << (blockno % 32))) { // the block is free
-      bitmap[blockno / 32] &= ~(1 << (blockno % 32));
-      write_block(blockno / BLOCK_SIZE_BIT + 2); // write to disk.
-      return blockno;
+  for (block_no = 3; block_no < super->s_nblocks; block_no++) {
+    if (bitmap[block_no / 32] & (1 << (block_no % 32))) { // the block is free
+      bitmap[block_no / 32] &= ~(1 << (block_no % 32));
+      write_block(block_no / BLOCK_SIZE_BIT + 2); // write to disk.
+      return block_no;
     }
   }
   // no free blocks.
@@ -460,20 +452,24 @@ int file_clear_block(struct File *f, u_int filebno) {
 //
 // Post-Condition:
 //  return 0 on success, and read the data to `blk`, return <0 on error.
+// 获取文件对应的磁盘块
 int file_get_block(struct File *f, u_int filebno, void **blk) {
-  int r;
+  int func_info;
   u_int diskbno;
   u_int isnew;
 
   // Step 1: find the disk block number is `f` using `file_map_block`.
-  if ((r = file_map_block(f, filebno, &diskbno, 1)) < 0) {
-    return r;
+  // 为即将读入内存的磁盘块分配物理内存
+  if ((func_info = file_map_block(f, filebno, &diskbno, 1)) < 0) {
+    return func_info;
   }
 
   // Step 2: read the data in this disk to blk.
-  if ((r = read_block(diskbno, blk, &isnew)) < 0) {
-    return r;
+  // 将磁盘内容以块为单位读入内存中的相应位置
+  if ((func_info = read_block(diskbno, blk, &isnew)) < 0) {
+    return func_info;
   }
+
   return 0;
 }
 
@@ -496,18 +492,16 @@ int file_dirty(struct File *f, u_int offset) {
 // Post-Condition:
 //  Return 0 on success, and set the pointer to the target file in `*file`.
 //  Return the underlying error if an error occurs.
-int dir_lookup(struct File *dir, char *name, struct File **file) {
-  // Step 1: Calculate the number of blocks in 'dir' via its size.
-  u_int nblock;
-  /* Exercise 5.8: Your code here. (1/3) */
-  nblock = dir->f_size / PAGE_SIZE;
+// 查找某个目录下是否存在指定的文件
+int dir_lookup(struct File *dictionary, char *name, struct File **file) {
+  // 计算目录下的磁盘块数
+  u_int block_num = dictionary->f_size / PAGE_SIZE;
 
   // Step 2: Iterate through all blocks in the directory.
-  for (int i = 0; i < nblock; i++) {
+  for (int i = 0; i < block_num; i++) {
     // Read the i'th block of 'dir' and get its address in 'blk' using 'file_get_block'.
     void *blk;
-    /* Exercise 5.8: Your code here. (2/3) */
-    try(file_get_block(dir, i, &blk));
+    try(file_get_block(dictionary, i, &blk));
 
     struct File *files = (struct File *)blk;
 
@@ -519,7 +513,7 @@ int dir_lookup(struct File *dir, char *name, struct File **file) {
       /* Exercise 5.8: Your code here. (3/3) */
       if (strcmp(name, f->f_name) == 0) {
         *file = f;
-        f->f_dir = dir;
+        f->f_dir = dictionary;
         return 0;
       }
     }

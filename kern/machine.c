@@ -2,7 +2,10 @@
 #include <mmu.h>
 #include <printk.h>
 
-/* Lab 1 Key Code "printcharc" */
+// 使用内存映射IO（MMOI）技术，通过控制台实现字符的输入输出
+// 设备寄存器被映射到指定的**物理地址**
+// 通过往内存的 0x180003F8+0xA0000000 地址写入字符，就能在shell中看到对应的输出
+
 /* Overview:
  *   Send a character to the console. If Transmitter Holding Register is currently occupied by
  *   some data, wait until the register becomes available.
@@ -18,7 +21,6 @@ void printcharc(char ch) {
   // 通过往内存的(0x180003F8+0xA0000000) 地址写入字符，实现向控制台的输出
   *((volatile uint8_t *)(KSEG1 + MALTA_SERIAL_DATA)) = ch;
 }
-/* End of Key Code "printcharc" */
 
 /* Overview:
  *   Read a character from the console.
