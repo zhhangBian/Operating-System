@@ -496,7 +496,7 @@ int sys_write_dev(u_int data_addr, u_int device_addr, u_int data_len) {
   }
   // 检查设备地址合法性
   if (!((CONSOLE_BEGIN <= device_addr && device_addr + data_len <= CONSOLE_END) ||
-        (IDE_BEGIN <= device_addr && device_addr + data_len <= IDE_END))) {
+        (IDE_BEGIN     <= device_addr && device_addr + data_len <= IDE_END))) {
     return -E_INVAL;
   }
   // 判断数据长度是否满足要求
@@ -509,6 +509,7 @@ int sys_write_dev(u_int data_addr, u_int device_addr, u_int data_len) {
       break;
     case 4:
       iowrite32(*(uint32_t *)data_addr, device_addr);
+      break;
     default:
       return -E_INVAL;
   }
@@ -535,7 +536,7 @@ int sys_read_dev(u_int data_addr, u_int device_addr, u_int data_len) {
   }
   // 检查设备地址合法性
   if (!((CONSOLE_BEGIN <= device_addr && device_addr + data_len <= CONSOLE_END) ||
-        (IDE_BEGIN <= device_addr && device_addr + data_len <= IDE_END))) {
+        (IDE_BEGIN     <= device_addr && device_addr + data_len <= IDE_END))) {
     return -E_INVAL;
   }
   // 判断数据长度是否满足要求
