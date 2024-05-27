@@ -36,19 +36,23 @@ int dev_lookup(int dev_id, struct Dev **dev) {
 //   Return 0 on success, or an error code on error.
 // 获取当前可使用的、id最小的文件描述符
 int fd_alloc(struct Fd **fd) {
-  u_int va;
-  u_int fdno;
+  u_int fd_va;
+  u_int fd_no;
 
-  for (fdno = 0; fdno < MAXFD - 1; fdno++) {
-    va = INDEX2FD(fdno);
+  for (fd_no = 0; fd_no < MAXFD - 1; fd_no++) {
+    // 获取fd_no对应的文件描述符地址
+    fd_va = INDEX2FD(fd_no);
+
+    // 没有其他数据结构来维护文件描述符是否被使用，而是直接查页表
+    // 文件描述符是在文件系统服务进程中创建，被共享到用户进程的地址区域中的
     // 检查页目录项
-    if ((vpd[va / PDMAP] & PTE_V) == 0) {
-      *fd = (struct Fd *)va;
+    if ((vpd[fd_va / PDMAP] & PTE_V) == 0) {
+      *fd = (struct Fd *)fd_va;
       return 0;
     }
 
-    if ((vpt[va / PTMAP] & PTE_V) == 0) { // the fd is not used
-      *fd = (struct Fd *)va;
+    if ((vpt[fd_va / PTMAP] & PTE_V) == 0) {
+      *fd = (struct Fd *)fd_va;
       return 0;
     }
   }

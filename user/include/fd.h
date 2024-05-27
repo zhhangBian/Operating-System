@@ -4,11 +4,13 @@
 #include <fs.h>
 
 #define debug 0
-
+// 文件描述符的最大个数
 #define MAXFD 32
 #define FILEBASE 0x60000000
+// 文件描述符的起始地址
 #define FDTABLE (FILEBASE - PDMAP)
 
+// 获取相应的文件描述符
 #define INDEX2FD(i) (FDTABLE + (i)*PTMAP)
 #define INDEX2DATA(i) (FILEBASE + (i)*PDMAP)
 

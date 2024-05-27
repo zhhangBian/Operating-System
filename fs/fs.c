@@ -19,14 +19,14 @@ void *disk_addr(u_int block_no) {
 // Overview:
 //  Check if this virtual address is mapped to a block. (check PTE_V bit)
 // 检查虚拟地址是否已经存在映射关系，本质是在检查页表是否有效
-int va_is_mapped(void *va) {
-  return (vpd[PDX(va)] & PTE_V) && (vpt[VPN(va)] & PTE_V);
+int va_is_mapped(void *virtual_address) {
+  return (vpd[PDX(virtual_address)] & PTE_V) && (vpt[VPN(virtual_address)] & PTE_V);
 }
 
 // Overview:
 //  Check if this disk block is mapped in cache.
 //  Returns the virtual address of the cache page if mapped, 0 otherwise.
-// 检查磁盘是否已经在内存中分配了内存块
+// 检查磁盘是否已经在内存中分配了内存块，如果没有返回NULL
 void *block_is_mapped(u_int block_no) {
   // 获取磁盘块在内存中对应的虚拟地址
   void *virtual_address = disk_addr(block_no);
@@ -40,31 +40,34 @@ void *block_is_mapped(u_int block_no) {
 
 // Overview:
 //  Check if this virtual address is dirty. (check PTE_DIRTY bit)
-int va_is_dirty(void *va) {
-  return vpt[VPN(va)] & PTE_DIRTY;
+// 检查虚拟地址对应的内存是否已经被修改
+int va_is_dirty(void *virtual_address) {
+  return vpt[VPN(virtual_address)] & PTE_DIRTY;
 }
 
 // Overview:
 //  Check if this block is dirty. (check corresponding `va`)
+// 检查磁盘块是否已经被修改
 int block_is_dirty(u_int block_no) {
-  void *va = disk_addr(block_no);
-  return va_is_mapped(va) && va_is_dirty(va);
+  void *virtual_address = disk_addr(block_no);
+  return va_is_mapped(virtual_address) && va_is_dirty(virtual_address);
 }
 
 // Overview:
 //  Mark this block as dirty (cache page has changed and needs to be written back to disk).
+// 将磁盘块标记被修改
 int dirty_block(u_int block_no) {
-  void *va = disk_addr(block_no);
+  void *virtual_address = disk_addr(block_no);
 
-  if (!va_is_mapped(va)) {
+  if (!va_is_mapped(virtual_address)) {
     return -E_NOT_FOUND;
   }
 
-  if (va_is_dirty(va)) {
+  if (va_is_dirty(virtual_address)) {
     return 0;
   }
-
-  return syscall_mem_map(0, va, 0, va, PTE_D | PTE_DIRTY);
+  // 标记脏位的方式是修改页面权限
+  return syscall_mem_map(0, virtual_address, 0, virtual_address, PTE_D | PTE_DIRTY);
 }
 
 // Overview:
@@ -77,6 +80,7 @@ void write_block(u_int block_no) {
   }
   // 将磁盘块的数据写回磁盘0中
   void *virtual_address = disk_addr(block_no);
+  // 写一个磁盘块的内容
   ide_write(0, block_no * SECT2BLK, virtual_address, SECT2BLK);
 }
 
@@ -124,7 +128,8 @@ int read_block(u_int block_no,  // 读取的磁盘块的块号
     }
     // 分配物理内存
     try(syscall_mem_alloc(0, virtual_address, PTE_D));
-    // 从磁盘中读取数据
+    // 读取一整个磁盘块的内容
+    // 利用乘得到读取的扇区号，读取一个磁盘块的内容
     ide_read(0, block_no * SECT2BLK, virtual_address, SECT2BLK);
   }
 
@@ -132,6 +137,7 @@ int read_block(u_int block_no,  // 读取的磁盘块的块号
   if (block_va_pointer) {
     *block_va_pointer = virtual_address;
   }
+
   return 0;
 }
 
@@ -152,7 +158,6 @@ int map_block(u_int block_no) {
 //  Unmap a disk block in cache.
 // 取消原先给磁盘分配的物理内存
 void unmap_block(u_int block_no) {
-  // Step 1: Get the mapped address of the cache page of this block using 'block_is_mapped'.
   void *virtual_address;
   virtual_address = block_is_mapped(block_no);
 
@@ -210,34 +215,36 @@ int alloc_block_num(void) {
   // walk through this bitmap, find a free one and mark it as used, then sync
   // this block to IDE disk (using `write_block`) from memory.
   for (block_no = 3; block_no < super->s_nblocks; block_no++) {
-    if (bitmap[block_no / 32] & (1 << (block_no % 32))) { // the block is free
+    // 通过位图判断磁盘块未被使用
+    if (bitmap[block_no / 32] & (1 << (block_no % 32))) {
+      // 将这个磁盘块标记为在被使用
       bitmap[block_no / 32] &= ~(1 << (block_no % 32));
       write_block(block_no / BLOCK_SIZE_BIT + 2); // write to disk.
       return block_no;
     }
   }
-  // no free blocks.
+  // 没有空闲的磁盘块
   return -E_NO_DISK;
 }
 
 // Overview:
 //  Allocate a block -- first find a free block in the bitmap, then map it into memory.
 int alloc_block(void) {
-  int r, bno;
+  int func_info;
+  int block_no;
   // Step 1: find a free block.
-  if ((r = alloc_block_num()) < 0) { // failed.
-    return r;
+  if ((block_no = alloc_block_num()) < 0) { // failed.
+    return block_no;
   }
-  bno = r;
 
   // Step 2: map this block into memory.
-  if ((r = map_block(bno)) < 0) {
-    free_block(bno);
-    return r;
+  if ((func_info = map_block(block_no)) < 0) {
+    free_block(block_no);
+    return func_info;
   }
 
   // Step 3: return block number.
-  return bno;
+  return block_no;
 }
 
 // Overview:
@@ -344,28 +351,28 @@ void fs_init(void) {
 
 // Overview:
 //  Like pgdir_walk but for files.
-//  Find the disk block number slot for the 'filebno'th block in file 'f'. Then, set
-//  '*ppdiskbno' to point to that slot. The slot will be one of the f->f_direct[] entries,
+//  Find the disk block number slot for the 'file_block_no'th block in file 'f'. Then, set
+//  '*ppdiskblock_no' to point to that slot. The slot will be one of the f->f_direct[] entries,
 //  or an entry in the indirect block.
 //  When 'alloc' is set, this function will allocate an indirect block if necessary.
 //
 // Post-Condition:
-//  Return 0 on success, and set *ppdiskbno to the pointer to the target block.
+//  Return 0 on success, and set *ppdiskblock_no to the pointer to the target block.
 //  Return -E_NOT_FOUND if the function needed to allocate an indirect block, but alloc was 0.
 //  Return -E_NO_DISK if there's no space on the disk for an indirect block.
 //  Return -E_NO_MEM if there's not enough memory for an indirect block.
-//  Return -E_INVAL if filebno is out of range (>= NINDIRECT).
+//  Return -E_INVAL if file_block_no is out of range (>= NINDIRECT).
 
-int file_block_walk(struct File *f, u_int filebno, uint32_t **ppdiskbno, u_int alloc) {
+int file_block_walk(struct File *f, u_int file_block_no, uint32_t **ppdiskblock_no, u_int alloc) {
   int func_info;
   uint32_t *ptr;
   uint32_t *blk;
 
-  if (filebno < NDIRECT) {
+  if (file_block_no < NDIRECT) {
     // Step 1: if the target block is corresponded to a direct pointer, just return the
     // disk block number.
-    ptr = &f->f_direct[filebno];
-  } else if (filebno < NINDIRECT) {
+    ptr = &f->f_direct[file_block_no];
+  } else if (file_block_no < NINDIRECT) {
     // Step 2: if the target block is corresponded to the indirect block, but there's no
     //  indirect block and `alloc` is set, create the indirect block.
     if (f->f_indirect == 0) {
@@ -383,18 +390,18 @@ int file_block_walk(struct File *f, u_int filebno, uint32_t **ppdiskbno, u_int a
     if ((func_info = read_block(f->f_indirect, (void **)&blk, 0)) < 0) {
       return func_info;
     }
-    ptr = blk + filebno;
+    ptr = blk + file_block_no;
   } else {
     return -E_INVAL;
   }
 
-  // Step 4: store the result into *ppdiskbno, and return 0.
-  *ppdiskbno = ptr;
+  // Step 4: store the result into *ppdiskblock_no, and return 0.
+  *ppdiskblock_no = ptr;
   return 0;
 }
 
 // OVerview:
-//  Set *diskbno to the disk block number for the filebno'th block in file f.
+//  Set *diskblock_no to the disk block number for the file_block_no'th block in file f.
 //  If alloc is set and the block does not exist, allocate it.
 //
 // Post-Condition:
@@ -403,14 +410,14 @@ int file_block_walk(struct File *f, u_int filebno, uint32_t **ppdiskbno, u_int a
 //   -E_NOT_FOUND: alloc was 0 but the block did not exist.
 //   -E_NO_DISK: if a block needed to be allocated but the disk is full.
 //   -E_NO_MEM: if we're out of memory.
-//   -E_INVAL: if filebno is out of range.
+//   -E_INVAL: if file_block_no is out of range.
 
-int file_map_block(struct File *file, u_int filebno, u_int *diskbno, u_int alloc) {
+int file_map_block(struct File *file, u_int file_block_no, u_int *diskblock_no, u_int alloc) {
   int r;
   uint32_t *ptr;
 
   // Step 1: find the pointer for the target block.
-  if ((r = file_block_walk(file, filebno, &ptr, alloc)) < 0) {
+  if ((r = file_block_walk(file, file_block_no, &ptr, alloc)) < 0) {
     return r;
   }
 
@@ -426,18 +433,18 @@ int file_map_block(struct File *file, u_int filebno, u_int *diskbno, u_int alloc
     *ptr = r;
   }
 
-  // Step 3: set the pointer to the block in *diskbno and return 0.
-  *diskbno = *ptr;
+  // Step 3: set the pointer to the block in *diskblock_no and return 0.
+  *diskblock_no = *ptr;
   return 0;
 }
 
 // Overview:
 //  Remove a block from file f. If it's not there, just silently succeed.
-int file_clear_block(struct File *f, u_int filebno) {
+int file_clear_block(struct File *f, u_int file_block_no) {
   int r;
   uint32_t *ptr;
 
-  if ((r = file_block_walk(f, filebno, &ptr, 0)) < 0) {
+  if ((r = file_block_walk(f, file_block_no, &ptr, 0)) < 0) {
     return r;
   }
 
@@ -450,7 +457,7 @@ int file_clear_block(struct File *f, u_int filebno) {
 }
 
 // Overview:
-//  Set *blk to point at the filebno'th block in file f.
+//  Set *blk to point at the file_block_no'th block in file f.
 //
 // Hint: use file_map_block and read_block.
 //
@@ -480,13 +487,13 @@ int file_get_block(struct File *file, u_int fileb_no, void **block_va_pointer) {
 //  Mark the offset/BLOCK_SIZE'th block dirty in file f.
 int file_dirty(struct File *f, u_int offset) {
   int r;
-  u_int diskbno;
+  u_int diskblock_no;
 
-  if ((r = file_map_block(f, offset / BLOCK_SIZE, &diskbno, 0)) < 0) {
+  if ((r = file_map_block(f, offset / BLOCK_SIZE, &diskblock_no, 0)) < 0) {
     return r;
   }
 
-  return dirty_block(diskbno);
+  return dirty_block(diskblock_no);
 }
 
 // Overview:
@@ -693,7 +700,7 @@ int file_create(char *path, struct File **file) {
 //
 // Hint: use file_clear_block.
 void file_truncate(struct File *f, u_int newsize) {
-  u_int bno, old_nblocks, new_nblocks;
+  u_int block_no, old_nblocks, new_nblocks;
 
   old_nblocks = ROUND(f->f_size, BLOCK_SIZE) / BLOCK_SIZE;
   new_nblocks = ROUND(newsize, BLOCK_SIZE) / BLOCK_SIZE;
@@ -703,16 +710,16 @@ void file_truncate(struct File *f, u_int newsize) {
   }
 
   if (new_nblocks <= NDIRECT) {
-    for (bno = new_nblocks; bno < old_nblocks; bno++) {
-      panic_on(file_clear_block(f, bno));
+    for (block_no = new_nblocks; block_no < old_nblocks; block_no++) {
+      panic_on(file_clear_block(f, block_no));
     }
     if (f->f_indirect) {
       free_block(f->f_indirect);
       f->f_indirect = 0;
     }
   } else {
-    for (bno = new_nblocks; bno < old_nblocks; bno++) {
-      panic_on(file_clear_block(f, bno));
+    for (block_no = new_nblocks; block_no < old_nblocks; block_no++) {
+      panic_on(file_clear_block(f, block_no));
     }
   }
   f->f_size = newsize;
@@ -743,14 +750,14 @@ int file_set_size(struct File *f, u_int newsize) {
 // Hint: use file_map_block, block_is_dirty, and write_block.
 void file_flush(struct File *f) {
   u_int nblocks;
-  u_int bno;
+  u_int block_no;
   u_int diskno;
   int r;
 
   nblocks = ROUND(f->f_size, BLOCK_SIZE) / BLOCK_SIZE;
 
-  for (bno = 0; bno < nblocks; bno++) {
-    if ((r = file_map_block(f, bno, &diskno, 0)) < 0) {
+  for (block_no = 0; block_no < nblocks; block_no++) {
+    if ((r = file_map_block(f, block_no, &diskno, 0)) < 0) {
       continue;
     }
     if (block_is_dirty(diskno)) {

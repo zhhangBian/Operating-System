@@ -6,6 +6,8 @@
 
 // 扇区的大小
 #define SECT_SIZE 512			  /* Bytes per disk sector */
+// 每个磁盘块所含有的扇区数量
+// 扇区是实际的存储单位，只有512B，太小了，所以用磁盘块来进行逻辑操作的基本的单位
 #define SECT2BLK (BLOCK_SIZE / SECT_SIZE) /* sectors to a block */
 
 /* Disk block n, when in memory, is mapped into the file system
