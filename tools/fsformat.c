@@ -22,13 +22,16 @@
 typedef struct Super Super;
 typedef struct File File;
 
-#define NBLOCK 1024 // The number of blocks in the disk.
+// 磁盘中磁盘块的数量
+#define NBLOCK 1024
 
-// 所需位图块的数量
-uint32_t nbitblock; // the number of bitmap blocks.
-uint32_t nextbno;   // next availiable block.
+// 存储位图所需要的磁盘块数量
+uint32_t nbitblock;
+// 下一个可用磁盘块的id
+uint32_t nextbno;
 
-struct Super super; // super block.
+// 本磁盘中的超级块
+struct Super super;
 
 // 磁盘块的类型
 enum {
@@ -42,8 +45,11 @@ enum {
 };
 
 // 磁盘块是一个虚拟概念，是操作系统与磁盘交互的最小单位
+// 将磁盘分为了若干的磁盘块，使用disk数组进行管理
 struct Block {
+  // 存储数据
   uint8_t data[BLOCK_SIZE];
+  // 磁盘块的类型
   uint32_t type;
 } disk[NBLOCK];
 
@@ -111,54 +117,49 @@ void reverse_block(struct Block *b) {
 
 // 磁盘初始化，对位图和超级块进行设置，将所有的块都标为空闲块
 void init_disk() {
-  int i, diff;
+  int i, diff_offest;
 
-  // 当作引导扇区和分区表使用
+  // 将第一个磁盘块设置为主引导扇区，作引导扇区和分区表使用
   disk[0].type = BLOCK_BOOT;
 
-  // 为了使用位图管理所需位图块的数量
+  // 存储位图所需要的磁盘块数量
   nbitblock = (NBLOCK + BLOCK_SIZE_BIT - 1) / BLOCK_SIZE_BIT;
-
+  // 从第3个磁盘块开始设置磁盘的位图
   nextbno = 2 + nbitblock;
-
-  // 将所有的块都标为空闲块
+  // 设置位图块
   for (i = 0; i < nbitblock; ++i) {
     disk[2 + i].type = BLOCK_BMAP;
   }
-
-  // 将位图中的每一个字节都设成0xff，即将所有位图块的每一位都设为1，表示磁盘块处于空闲状态
+  // 初始化位图，将位图中的每一位都设为1，表示磁盘块处于空闲状态
   for (i = 0; i < nbitblock; ++i) {
     memset(disk[2 + i].data, 0xff, BLOCK_SIZE);
   }
-
-  // 如果位图还有剩余，不能将最后一块位图块中靠后的一部分内容标记为空闲，因为这些位所对应的磁盘块并不存在，是不可使用的。
-  // 将所有的位图块的每一位都置为1后，根据实际情况，将位图不存在的部分设为0
+  // 如果位图无法完全占满磁盘块，将多余的位设置为0
   if (NBLOCK != nbitblock * BLOCK_SIZE_BIT) {
-    diff = NBLOCK % BLOCK_SIZE_BIT / 8;
-    memset(disk[2 + (nbitblock - 1)].data + diff, 0x00, BLOCK_SIZE - diff);
+    diff_offest = NBLOCK % BLOCK_SIZE_BIT / 8;
+    memset(disk[2 + (nbitblock - 1)].data + diff_offest, 0x00, BLOCK_SIZE - diff_offest);
   }
 
-  // Step 3: Initialize super block.
+  // 将第一个磁盘块设置为超级块
   disk[1].type = BLOCK_SUPER;
+  // 初始化超级块
   super.s_magic = FS_MAGIC;
   super.s_nblocks = NBLOCK;
   super.s_root.f_type = FTYPE_DIR;
   strcpy(super.s_root.f_name, "/");
 }
 
-// Get next block id, and set `type` to the block's type.
+// 获取下一个可用磁盘块的id
 int next_block(int type) {
   disk[nextbno].type = type;
   return nextbno++;
 }
 
 // Flush disk block usage to bitmap.
+// 根据磁盘块的使用情况设置位图
 void flush_bitmap() {
-  int i;
-  // update bitmap, mark all bit where corresponding block is used.
-  for (i = 0; i < nextbno; ++i) {
-    ((uint32_t *)disk[2 + i / BLOCK_SIZE_BIT].data)[(i % BLOCK_SIZE_BIT) / 32] &=
-        ~(1 << (i % 32));
+  for (int i = 0; i < nextbno; ++i) {
+    ((uint32_t *)disk[2 + i / BLOCK_SIZE_BIT].data)[(i % BLOCK_SIZE_BIT) / 32] &= ~(1 << (i % 32));
   }
 }
 
@@ -183,27 +184,35 @@ void finish_fs(char *name) {
   close(fd);
 }
 
-// Save block link.
-void save_block_link(struct File *f, int block_num, int bno) {
-  assert(block_num < NINDIRECT); // if not, file is too large !
+// 将磁盘块添加到目录下
+void save_block_link(struct File *dictionary_file, int block_num_used, int block_no) {
+  // 检查文件是否过大
+  assert(block_num_used < NINDIRECT);
 
-  if (block_num < NDIRECT) {
-    f->f_direct[block_num] = bno;
-  } else {
-    if (f->f_indirect == 0) {
-      // create new indirect block.
-      f->f_indirect = next_block(BLOCK_INDEX);
+  // 目录下属的文件较少，使用直接指针
+  if (block_num_used < NDIRECT) {
+    dictionary_file->f_direct[block_num_used] = block_no;
+  }
+  // 使用间接指针
+  else {
+    // 为间接指针分配一个空闲磁盘块，用于存储其他磁盘块
+    if (dictionary_file->f_indirect == 0) {
+      dictionary_file->f_indirect = next_block(BLOCK_INDEX);
     }
-    ((uint32_t *)(disk[f->f_indirect].data))[block_num] = bno;
+    ((uint32_t *)(disk[dictionary_file->f_indirect].data))[block_num_used] = block_no;
   }
 }
 
-// Make new block contains link to files in a directory.
-int make_link_block(struct File *dictionary_file, int block_num) {
-  int bno = next_block(BLOCK_FILE);
-  save_block_link(dictionary_file, block_num, bno);
+// 获取下一个空闲的磁盘控制块，并添加到对应目录下
+int make_link_block(struct File *dictionary_file, int block_num_used) {
+  // 获取一个可用的磁盘控制块id
+  int new_block_no = next_block(BLOCK_FILE);
+  // 将磁盘块添加到目录下
+  save_block_link(dictionary_file, block_num_used, new_block_no);
+  // 增加文件大小
   dictionary_file->f_size += BLOCK_SIZE;
-  return bno;
+
+  return new_block_no;
 }
 
 // Overview:
@@ -215,60 +224,54 @@ int make_link_block(struct File *dictionary_file, int block_num) {
 // Post-Condition:
 //  Return a pointer to an unused 'struct File'.
 //  We assume that this function will never fail.
-//
-// Hint:
-//  Use 'make_link_block' to allocate a new block for the directory if there are no existing unused
-//  'File's.
-// 在指定的目录下创建磁盘镜像文件，并返回相应的文件指针
+// 在目录下寻找可用的文件控制块，返回相应的文件控制块指针
 struct File *create_file(struct File *dictionary_file) {
-  int block_num = dictionary_file->f_size / BLOCK_SIZE;
+  // 目录占据的磁盘块数量
+  // 目录存储的全部文件就是磁盘控制块，故目录大小就是占据的磁盘块的大小
+  int block_num_used = dictionary_file->f_size / BLOCK_SIZE;
 
-  // Step 1: Iterate through all existing blocks in the directory.
-  // 遍历目录下的所有磁盘块
-  for (int i = 0; i < block_num; ++i) {
+  // 先检查原有目录中是否有现在不被使用的磁盘控制块
+  // 遍历目录占据的所有磁盘块
+  for (int i = 0; i < block_num_used; ++i) {
     // 磁盘块号
-    int block_no;
-    // 如果i在直接指针区域，则直接获取
-    if (i < NDIRECT) {
-      block_no = dictionary_file->f_direct[i];
-    } 
-    // 否则访问间接指针指向的磁盘块，通过其存储的指针获取
-    else {
-      block_no = ((uint32_t *)(disk[dictionary_file->f_indirect].data))[i];
-    }
+    int block_no = (i < NDIRECT) ?
+                    // 如果i在直接指针区域，则直接获取
+                    dictionary_file->f_direct[i] :
+                    // 否则访问间接指针指向的磁盘块，通过其存储的指针获取
+                    ((uint32_t *)(disk[dictionary_file->f_indirect].data))[i];
 
-    // 通过磁盘块号获取对应的文件
-    struct File *blk = (struct File *)(disk[block_no].data);
-
-    // Iterate through all 'File's in the directory block.
-    for (struct File *f = blk; f < blk + FILE2BLK; ++f) {
-      // 如果文件名为 NULL，则代表文件未被使用，返回未被使用的文件块
-      if (f->f_name[0] == NULL) {
-        return f;
+    // 获取磁盘块的起始文件控制块
+    struct File *file_block = (struct File *)(disk[block_no].data);
+    // 遍历磁盘块存储的文件控制块
+    for (struct File *file = file_block; file < file_block + FILE2BLK; ++file) {
+      // 文件名为 NULL，代表文件未被使用，返回未被使用的文件块
+      if (file->f_name[0] == NULL) {
+        return file;
       }
     }
   }
 
-  // Step 2: If no unused file is found, allocate a new block using 'make_link_block' function
-  // and return a pointer to the new block on 'disk'.
-  // 所有的已分配给当前目录文件、用于存储文件控制块的磁盘块都被占满了
-  // 新申请一个磁盘块。该磁盘块中第一个文件控制块的位置就代表了新创建的文件。
-  return (struct File *)(disk[make_link_block(dictionary_file, block_num)].data);
+  // 进行到这一步，说明磁盘中所有的文件控制块都被使用，需要新的磁盘控制块
+  int new_block_no = make_link_block(dictionary_file, block_num_used);
+  return (struct File *)(disk[new_block_no].data);
 }
 
 // Write file to disk under specified dir.
+// 将文件写入磁盘
 void write_file(struct File *dictionary_file, const char *path) {
   int iblk = 0, r = 0, n = sizeof(disk[0].data);
+  // 在目录下创建文件按
   struct File *target = create_file(dictionary_file);
 
   /* in case `create_file` is't filled */
   if (target == NULL) {
     return;
   }
-
+  // 打开宿主机上的文件，便于后面复制文件内容到镜像中
   int fd = open(path, O_RDONLY);
 
   // Get file name with no path prefix.
+  // 复制文件名
   const char *fname = strrchr(path, '/');
   if (fname) {
     fname++;
@@ -276,11 +279,13 @@ void write_file(struct File *dictionary_file, const char *path) {
     fname = path;
   }
   strcpy(target->f_name, fname);
-
+  // 使用 lseek 获取并设置文件大小
   target->f_size = lseek(fd, 0, SEEK_END);
+  // 设置文件类型为普通文件
   target->f_type = FTYPE_REG;
 
   // Start reading file.
+  // 读取文件内容，写入镜像文件中
   lseek(fd, 0, SEEK_SET);
   while ((r = read(fd, disk[nextbno].data, n)) > 0) {
     save_block_link(target, iblk++, next_block(BLOCK_DATA));
@@ -295,28 +300,40 @@ void write_file(struct File *dictionary_file, const char *path) {
 //
 // Post-Condition:
 //  We ASSUME that this funcion will never fail
-// 用于递归地将目录下所有文件写入磁盘
+// 递归地将目录下所有文件写入磁盘
+// 该函数不是在QEMU上执行的，是在linux宿主机上执行的，用于创建磁盘镜像
+// 不用关注太多的细节
 void write_directory(struct File *dictionary_file, char *path) {
+  // 调用库函数打开目录
   DIR *dir = opendir(path);
   if (dir == NULL) {
     perror("opendir");
     return;
   }
+
+  // 创建一个新的**目录类型**的文件控制块
   struct File *pdir = create_file(dictionary_file);
   strncpy(pdir->f_name, basename(path), MAXNAMELEN - 1);
+  // 复制目录的名字（具体细节不用关注）
   if (pdir->f_name[MAXNAMELEN - 1] != 0) {
     fprintf(stderr, "file name is too long: %s\n", path);
     // File already created, no way back from here.
     exit(1);
   }
+  // 设置文件的类型为目录类型
   pdir->f_type = FTYPE_DIR;
+
+  // 遍历宿主机上该路径下的所有文件
   for (struct dirent *e; (e = readdir(dir)) != NULL;) {
     if (strcmp(e->d_name, ".") != 0 && strcmp(e->d_name, "..") != 0) {
       char *buf = malloc(strlen(path) + strlen(e->d_name) + 2);
       sprintf(buf, "%s/%s", path, e->d_name);
+      // 如果是目录类型，递归调用自身将目录写入磁盘
       if (e->d_type == DT_DIR) {
         write_directory(pdir, buf);
-      } else {
+      } 
+      // 普通文件类型，则将文件写入磁盘
+      else {
         write_file(pdir, buf);
       }
       free(buf);
@@ -334,6 +351,7 @@ int main(int argc, char **argv) {
     exit(1);
   }
 
+  // 创建磁盘镜像文件
   for (int i = 2; i < argc; i++) {
     char *name = argv[i];
     struct stat stat_buf;
@@ -350,8 +368,9 @@ int main(int argc, char **argv) {
       exit(2);
     }
   }
-
+  // 根据磁盘块的使用情况设置位图
   flush_bitmap();
+  // 根据disk生成磁盘镜像文件
   finish_fs(argv[1]);
 
   return 0;

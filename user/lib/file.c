@@ -3,6 +3,8 @@
 
 #define debug 0
 
+// 为用户程序提供一系列库函数来完成文件的相关操作
+
 static int file_close(struct Fd *fd);
 static int file_read(struct Fd *fd, void *buf, u_int n, u_int offset);
 static int file_write(struct Fd *fd, const void *buf, u_int n, u_int offset);
@@ -25,34 +27,30 @@ struct Dev devfile = {
 // Returns:
 //  the file descriptor on success,
 //  the underlying error on failure.
+// 按照mode模式打开path的文件，返回文件描述符
 int open(const char *path, int mode) {
-  int r;
-
-  // Step 1: Alloc a new 'Fd' using 'fd_alloc' in fd.c.
-  // Hint: return the error code if failed.
+  // 获取一个新的文件描述符
   struct Fd *fd;
-  /* Exercise 5.9: Your code here. (1/5) */
   try(fd_alloc(&fd));
 
-  // Step 2: Prepare the 'fd' using 'fsipc_open' in fsipc.c.
-  /* Exercise 5.9: Your code here. (2/5) */
+  // 使用文件服务IPC打开文件
   try(fsipc_open(path, mode, fd));
 
   // Step 3: Set 'va' to the address of the page where the 'fd''s data is cached, using
   // 'fd2data'. Set 'size' and 'fileid' correctly with the value in 'fd' as a 'Filefd'.
   char *va;
   struct Filefd *ffd;
-  u_int size, fileid;
+  u_int size, file_id;
   /* Exercise 5.9: Your code here. (3/5) */
   va = fd2data(fd);
   ffd = (struct Filefd *)fd;
   size = ffd->f_file.f_size;
-  fileid = ffd->f_fileid;
+  file_id = ffd->f_fileid;
 
   // Step 4: Map the file content using 'fsipc_map'.
   for (int i = 0; i < size; i += PTMAP) {
     /* Exercise 5.9: Your code here. (4/5) */
-    try(fsipc_map(fileid, i, va + i));
+    try(fsipc_map(file_id, i, va + i));
   }
 
   // Step 5: Return the number of file descriptor using 'fd2num'.

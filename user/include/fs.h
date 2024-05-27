@@ -8,6 +8,7 @@
 // Bytes per file system block - same as page size
 // 磁盘块的大小，单位为字节
 #define BLOCK_SIZE PAGE_SIZE
+// 磁盘块的大小，单位为位
 #define BLOCK_SIZE_BIT (BLOCK_SIZE * 8)
 
 // Maximum size of a filename (a single path component), including null
@@ -32,23 +33,24 @@ struct File {
   uint32_t f_size;
   // 文件类型，有普通文件FTYPE_REG和目录FTYPE_DIR两种。
   uint32_t f_type;
-  // 文件的直接指针，用来记录存储文件的磁盘块
-  // 最多有10个指针，每个磁盘块大小为4KB，故文件最大为40KB
+  // 用来记录存储文件的磁盘块的磁盘控制块id
+  // 最多存储10个磁盘控制块id，每个磁盘块大小为4KB
   uint32_t f_direct[NDIRECT];
-  // 指向一个间接磁盘块，用来存储  指向文件内容的磁盘块的指针
+  // 用于存储 更多的磁盘块指针 的磁盘块的磁盘控制块id
   // 在文件大小超过40KB时使用，共1024个指针，但不使用前10个指针
   uint32_t f_indirect;
   // 指向文件所属的文件目录
   struct File *f_dir;
-  // 为了让整数个文件结构体占用一个磁盘块，填充结构体中剩下的字节
+  // 让文件控制块和PAGE_SIZE对齐的填充部分
   char f_pad[FILE_STRUCT_SIZE - MAXNAMELEN - (3 + NDIRECT) * 4 - sizeof(void *)];
 } __attribute__((aligned(4), packed));
 
 #define FILE2BLK (BLOCK_SIZE / sizeof(struct File))
 
-// File types
-#define FTYPE_REG 0 // Regular file
-#define FTYPE_DIR 1 // Directory
+// 常规文件类型
+#define FTYPE_REG 0
+// 目录类型
+#define FTYPE_DIR 1
 
 // File system super-block (both in-memory and on-disk)
 

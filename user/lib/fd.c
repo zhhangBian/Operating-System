@@ -3,11 +3,14 @@
 #include <lib.h>
 #include <mmu.h>
 
-static struct Dev *devtab[] = {&devfile, &devcons,
+static struct Dev *devtab[] = {
+  &devfile,
+  &devcons,
 #if !defined(LAB) || LAB >= 6
-             &devpipe,
+  &devpipe,
 #endif
-             0};
+  0
+};
 
 int dev_lookup(int dev_id, struct Dev **dev) {
   for (int i = 0; devtab[i]; i++) {
@@ -31,13 +34,14 @@ int dev_lookup(int dev_id, struct Dev **dev) {
 //    in a row without allocating the first page we returned, we'll
 //    return the same page at the second time.)
 //   Return 0 on success, or an error code on error.
+// 获取当前可使用的、id最小的文件描述符
 int fd_alloc(struct Fd **fd) {
   u_int va;
   u_int fdno;
 
   for (fdno = 0; fdno < MAXFD - 1; fdno++) {
     va = INDEX2FD(fdno);
-
+    // 检查页目录项
     if ((vpd[va / PDMAP] & PTE_V) == 0) {
       *fd = (struct Fd *)va;
       return 0;

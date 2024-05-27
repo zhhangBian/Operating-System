@@ -3,6 +3,7 @@
 
 struct Super *super;
 
+// 管理磁盘块的位图
 uint32_t *bitmap;
 
 void file_flush(struct File *);
@@ -354,8 +355,9 @@ void fs_init(void) {
 //  Return -E_NO_DISK if there's no space on the disk for an indirect block.
 //  Return -E_NO_MEM if there's not enough memory for an indirect block.
 //  Return -E_INVAL if filebno is out of range (>= NINDIRECT).
+
 int file_block_walk(struct File *f, u_int filebno, uint32_t **ppdiskbno, u_int alloc) {
-  int r;
+  int func_info;
   uint32_t *ptr;
   uint32_t *blk;
 
@@ -371,15 +373,15 @@ int file_block_walk(struct File *f, u_int filebno, uint32_t **ppdiskbno, u_int a
         return -E_NOT_FOUND;
       }
 
-      if ((r = alloc_block()) < 0) {
-        return r;
+      if ((func_info = alloc_block()) < 0) {
+        return func_info;
       }
-      f->f_indirect = r;
+      f->f_indirect = func_info;
     }
 
     // Step 3: read the new indirect block to memory.
-    if ((r = read_block(f->f_indirect, (void **)&blk, 0)) < 0) {
-      return r;
+    if ((func_info = read_block(f->f_indirect, (void **)&blk, 0)) < 0) {
+      return func_info;
     }
     ptr = blk + filebno;
   } else {
@@ -402,12 +404,13 @@ int file_block_walk(struct File *f, u_int filebno, uint32_t **ppdiskbno, u_int a
 //   -E_NO_DISK: if a block needed to be allocated but the disk is full.
 //   -E_NO_MEM: if we're out of memory.
 //   -E_INVAL: if filebno is out of range.
-int file_map_block(struct File *f, u_int filebno, u_int *diskbno, u_int alloc) {
+
+int file_map_block(struct File *file, u_int filebno, u_int *diskbno, u_int alloc) {
   int r;
   uint32_t *ptr;
 
   // Step 1: find the pointer for the target block.
-  if ((r = file_block_walk(f, filebno, &ptr, alloc)) < 0) {
+  if ((r = file_block_walk(file, filebno, &ptr, alloc)) < 0) {
     return r;
   }
 
@@ -452,22 +455,21 @@ int file_clear_block(struct File *f, u_int filebno) {
 // Hint: use file_map_block and read_block.
 //
 // Post-Condition:
-//  return 0 on success, and read the data to `blk`, return <0 on error.
-// 获取文件对应的磁盘块
-int file_get_block(struct File *f, u_int filebno, void **blk) {
+//  return 0 on success, and read the data to `block_va_pointer`, return <0 on error.
+// 获取文件对应的磁盘块，并将其读入内存
+int file_get_block(struct File *file, u_int fileb_no, void **block_va_pointer) {
   int func_info;
-  u_int diskbno;
-  u_int isnew;
+  u_int disk_block_no;
+  u_int if_not_mapped_before;
 
   // Step 1: find the disk block number is `f` using `file_map_block`.
   // 为即将读入内存的磁盘块分配物理内存
-  if ((func_info = file_map_block(f, filebno, &diskbno, 1)) < 0) {
+  if ((func_info = file_map_block(file, fileb_no, &disk_block_no, 1)) < 0) {
     return func_info;
   }
 
-  // Step 2: read the data in this disk to blk.
   // 将磁盘内容以块为单位读入内存中的相应位置
-  if ((func_info = read_block(diskbno, blk, &isnew)) < 0) {
+  if ((func_info = read_block(disk_block_no, block_va_pointer, &if_not_mapped_before)) < 0) {
     return func_info;
   }
 
@@ -493,28 +495,26 @@ int file_dirty(struct File *f, u_int offset) {
 // Post-Condition:
 //  Return 0 on success, and set the pointer to the target file in `*file`.
 //  Return the underlying error if an error occurs.
-// 查找某个目录下是否存在指定的文件
-int dir_lookup(struct File *dictionary, char *name, struct File **file) {
-  // 计算目录下的磁盘块数
+// 查找某个目录下是否存在指定文件名的文件，保存到指针中
+int dir_lookup(struct File *dictionary, char *name, struct File **file_pointer) {
+  // 获取目录占有的总磁盘块数
   u_int block_num = dictionary->f_size / PAGE_SIZE;
 
-  // Step 2: Iterate through all blocks in the directory.
+  // 遍历每一个磁盘块，寻找文件
   for (int i = 0; i < block_num; i++) {
-    // Read the i'th block of 'dir' and get its address in 'blk' using 'file_get_block'.
-    void *blk;
-    try(file_get_block(dictionary, i, &blk));
+    // Read the i'th block of 'dir' and get its address in 'block_va' using 'file_get_block'.
+    void *block_va;
+    try(file_get_block(dictionary, i, &block_va));
 
-    struct File *files = (struct File *)blk;
+    struct File *files = (struct File *)block_va;
 
-    // Find the target among all 'File's in this block.
-    for (struct File *f = files; f < files + FILE2BLK; ++f) {
-      // Compare the file name against 'name' using 'strcmp'.
-      // If we find the target file, set '*file' to it and set up its 'f_dir'
-      // field.
-      /* Exercise 5.8: Your code here. (3/3) */
-      if (strcmp(name, f->f_name) == 0) {
-        *file = f;
-        f->f_dir = dictionary;
+    // 遍历磁盘块中的所有文件，比较文件名
+    for (struct File *file = files; file < files + FILE2BLK; ++file) {
+      // 比较文件名来判断是否为所需文件
+      if (strcmp(name, file->f_name) == 0) {
+        *file_pointer = file;
+        // 设置文件的所属目录
+        file->f_dir = dictionary;
         return 0;
       }
     }

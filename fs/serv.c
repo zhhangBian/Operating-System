@@ -8,6 +8,7 @@
 #include <fsreq.h>
 #include <lib.h>
 #include <mmu.h>
+
 /*
  * Fields
  * o_file: mapped descriptor for open file
@@ -15,16 +16,22 @@
  * o_mode: open mode
  * o_ff: va of filefd page
  */
+// 记录打开文件的信息
 struct Open {
+  // 指向打开文件的指针
   struct File *o_file;
+  // 打开文件的id
   u_int o_fileid;
+  // 文件的打开方式
   int o_mode;
+  // 文件描述符
   struct Filefd *o_ff;
 };
 
 /*
  * Max number of open files in the file system at once
  */
+// 整个操作系统最大同时打开的文件数目
 #define MAXOPEN 1024
 
 #define FILEVA 0x60000000
@@ -32,6 +39,7 @@ struct Open {
 /*
  * Open file table, a per-environment array of open files
  */
+// 用于记录整个操作系统中所有处于打开状态的文件
 struct Open opentab[MAXOPEN];
 
 /*
@@ -43,6 +51,7 @@ struct Open opentab[MAXOPEN];
  * Overview:
  *  Set up open file table and connect it with the file cache.
  */
+// 文件服务进程初始化
 void serve_init(void) {
   int i;
   u_int va;
@@ -301,7 +310,7 @@ void serve_remove(u_int envid, struct Fsreq_remove *rq) {
  * Parameters:
  *  envid: the id of the request process.
  *  rq: the request, which contains the fileid and the offset.
- * `Return`:  
+ * `Return`:
  *  if Success, use ipc_send to return 0 to the caller. Otherwise,
  *  return the error value to the caller.
  */
@@ -340,11 +349,11 @@ void serve_sync(u_int envid) {
  * call the corresponding serve function.
  */
 void *serve_table[MAX_FSREQNO] = {
-    [FSREQ_OPEN]          = serve_open,	 
-    [FSREQ_MAP]           = serve_map,     
+    [FSREQ_OPEN]          = serve_open,
+    [FSREQ_MAP]           = serve_map,
     [FSREQ_SET_SIZE]      = serve_set_size,
-    [FSREQ_CLOSE]         = serve_close, 
-    [FSREQ_DIRTY]         = serve_dirty, 
+    [FSREQ_CLOSE]         = serve_close,
+    [FSREQ_DIRTY]         = serve_dirty,
     [FSREQ_REMOVE]        = serve_remove,
     [FSREQ_SYNC]          = serve_sync,
 };
@@ -357,13 +366,14 @@ void *serve_table[MAX_FSREQNO] = {
  *  call the corresponding serve function with the reqeust number
  *  to handle the request.
  */
+// 文件服务进程的主函数，接收其他进程发送的文件服务请求
 void serve(void) {
   u_int req, whom, perm;
   void (*func)(u_int, u_int);
 
   for (;;) {
     perm = 0;
-
+    // 一直进行等待
     req = ipc_recv(&whom, (void *)REQVA, &perm);
 
     // All requests must contain an argument page
@@ -394,6 +404,7 @@ void serve(void) {
  *  It will call the `serve_init` to initialize the file system
  *  and then call the `serve` to handle the requests.
  */
+// 文件服务进程的主程序
 int main() {
   user_assert(sizeof(struct File) == FILE_STRUCT_SIZE);
 
@@ -403,5 +414,6 @@ int main() {
   fs_init();
 
   serve();
+
   return 0;
 }

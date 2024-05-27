@@ -21,6 +21,8 @@ struct Dev;
 // It is used to read and write data from corresponding device.
 // We can use the five functions to handle data.
 // There are three devices in this OS: file, console and pipe.
+// 设备类型，设置了相应的设备id和对设备的基本操作，通过函数指针实现
+// MOS中共有文件、终端、管道三种文件类型
 struct Dev {
 	int dev_id;
 	char *dev_name;
@@ -32,9 +34,15 @@ struct Dev {
 };
 
 // file descriptor
+// 文件描述符，作为用户程序管理、操作文件的基础。
+// 不反映文件的结构，是在用户侧对文件的抽象
+// 文件描述符并不是在用户进程中被创建的，而是在文件系统服务进程中创建，被共享到用户进程的地址区域中的
 struct Fd {
+  // 文件对应的设备id
 	u_int fd_dev_id;
+  // 文件读写的偏移量
 	u_int fd_offset;
+  // 文件读写的模式
 	u_int fd_omode;
 };
 
