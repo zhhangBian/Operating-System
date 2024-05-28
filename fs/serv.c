@@ -54,12 +54,11 @@ struct Open opentab[MAXOPEN];
 // 文件服务进程初始化
 void serve_init(void) {
   int i;
-  u_int va;
-
   // Set virtual address to map.
-  va = FILEVA;
+  u_int va = FILEVA;
 
   // Initial array opentab.
+  // 初始化打开文件记录表
   for (i = 0; i < MAXOPEN; i++) {
     opentab[i].o_fileid = i;
     opentab[i].o_ff = (struct Filefd *)va;

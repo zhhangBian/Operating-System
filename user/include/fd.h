@@ -12,6 +12,8 @@
 
 // 获取相应的文件描述符
 #define INDEX2FD(i) (FDTABLE + (i)*PTMAP)
+// 获取文件名描述符id对应的，文件应该被映射到的地址
+// 为每个文件描述符分配了4MB的空间
 #define INDEX2DATA(i) (FILEBASE + (i)*PDMAP)
 
 // pre-declare for forward references
@@ -42,10 +44,20 @@ struct Dev {
 struct Fd {
   // 文件对应的设备id
 	u_int fd_dev_id;
-  // 文件读写的偏移量
+  // 维护一个读写文件的指针，当前读写到文件哪里
 	u_int fd_offset;
   // 文件读写的模式
 	u_int fd_omode;
+};
+
+// file descriptor + file
+// 将文件描述符fd共享到用户进程时，实际上是在共享Filefd
+// 通过指针的强制转换改变了对地址处数据的解释方式
+// Fieldfd的第一个成员就是Fd，因此指向Filefd的指针同样指向这个Fd的起始位置，故可以进行强制转换
+struct Filefd {
+	struct Fd f_fd;
+	u_int f_fileid;
+	struct File f_file;
 };
 
 // State
@@ -54,15 +66,6 @@ struct Stat {
 	u_int st_size;
 	u_int st_isdir;
 	struct Dev *st_dev;
-};
-
-// file descriptor + file
-// 将文件描述符fd共享到用户进程时，实际上是在共享Filefd
-// 通过指针的强制转换改变了对地址处数据的解释方式
-struct Filefd {
-	struct Fd f_fd;
-	u_int f_fileid;
-	struct File f_file;
 };
 
 int fd_alloc(struct Fd **fd);

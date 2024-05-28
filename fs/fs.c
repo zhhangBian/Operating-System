@@ -344,8 +344,11 @@ void check_write_block(void) {
 //  2. check if the disk can work.
 //  3. read bitmap blocks from disk to memory.
 void fs_init(void) {
+  // 检查超级块
   read_super();
+  // 检查磁盘能否工作
   check_write_block();
+  // 检查位图
   read_bitmap();
 }
 

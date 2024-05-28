@@ -3,6 +3,7 @@
 #include <lib.h>
 #include <mmu.h>
 
+// 保存了相应的设备
 static struct Dev *devtab[] = {
   &devfile,
   &devcons,
@@ -12,13 +13,16 @@ static struct Dev *devtab[] = {
   0
 };
 
+// 找到dev_id对应的设备，保存到指针
 int dev_lookup(int dev_id, struct Dev **dev) {
+  // 遍历设备列表，寻找是否有对应id的设备
   for (int i = 0; devtab[i]; i++) {
     if (devtab[i]->dev_id == dev_id) {
       *dev = devtab[i];
       return 0;
     }
   }
+  // 找不到设备
   *dev = NULL;
   debugf("[%08x] unknown device type %d\n", env->env_id, dev_id);
   return -E_INVAL;
@@ -43,18 +47,24 @@ int fd_alloc(struct Fd **fd) {
   // 寻找id最小的可用的文件描述符
   for (fd_no = 0; fd_no < MAXFD - 1; fd_no++) {
     // 获取fd_no对应的文件描述符地址
+    // fd的地址是固定的，主要对地址进行操作，基本没对数据结构进行操作
     fd_va = INDEX2FD(fd_no);
 
     // 没有其他数据结构来维护文件描述符是否被使用，而是直接查页表
     // 文件描述符是在文件系统服务进程中创建，被共享到用户进程的地址区域中的
 
     // 检查页目录项：用除法直接获取对应页目录项号
-    if ((vpd[fd_va / PDMAP] & PTE_V) == 0) {
+    int pde_no = fd_va / PDMAP;
+    // 得到相应的页目录，页目录无效，则后续的页表肯定无效，直接返回va
+    if ((vpd[pde_no] & PTE_V) == 0) {
       *fd = (struct Fd *)fd_va;
       return 0;
     }
+
     // 检查页表项：用除法直接获取对应页表项号
-    if ((vpt[fd_va / PTMAP] & PTE_V) == 0) {
+    int pte_no = fd_va / PTMAP;
+    // 得到相应的页表，页表无效，通过指针返回va
+    if ((vpt[pte_no] & PTE_V) == 0) {
       *fd = (struct Fd *)fd_va;
       return 0;
     }
@@ -63,6 +73,7 @@ int fd_alloc(struct Fd **fd) {
   return -E_MAX_OPEN;
 }
 
+// 接触文件描述符的占用：直接取消其地址映射
 void fd_close(struct Fd *fd) {
   panic_on(syscall_mem_unmap(0, fd));
 }
@@ -73,53 +84,66 @@ void fd_close(struct Fd *fd) {
 // Post-Condition:
 //  Return 0 and set *fd to the pointer to the 'Fd' page on success.
 //  Return -E_INVAL if 'fdnum' is invalid or unmapped.
-int fd_lookup(int fdnum, struct Fd **fd) {
-  u_int va;
-
-  if (fdnum >= MAXFD) {
+// 找到fd_no对应的fd，同时检查fd是否正在被使用，不再使用则报错
+int fd_lookup(int fd_no, struct Fd **fd) {
+  // 判断fd是否合法
+  if (fd_no >= MAXFD) {
     return -E_INVAL;
   }
 
-  va = INDEX2FD(fdnum);
-
-  if ((vpt[va / PTMAP] & PTE_V) != 0) { // the fd is used
-    *fd = (struct Fd *)va;
+  u_int fd_va = INDEX2FD(fd_no);
+  // 判断fd是否在被使用
+  int pte_no = fd_va / PTMAP;
+  // 通过页表判断
+  if ((vpt[pte_no] & PTE_V) != 0) {
+    *fd = (struct Fd *)fd_va;
     return 0;
   }
 
   return -E_INVAL;
 }
 
+// 获取文件描述符对应的，文件应该被映射到的虚拟地址
 void *fd2data(struct Fd *fd) {
   return (void *)INDEX2DATA(fd2num(fd));
 }
 
+// 获取文件描述符的id
 int fd2num(struct Fd *fd) {
   return ((u_int)fd - FDTABLE) / PTMAP;
 }
 
+// 获取id对应的文件描述符
 int num2fd(int fd) {
   return fd * PTMAP + FDTABLE;
 }
 
-int close(int fdnum) {
-  int r;
-  struct Dev *dev = NULL;
+// 关闭文件，会同时关闭文件描述符的占用
+int close(int fd_no) {
+  struct Dev *dev;
   struct Fd *fd;
+  int func_info;
 
-  if ((r = fd_lookup(fdnum, &fd)) < 0 || (r = dev_lookup(fd->fd_dev_id, &dev)) < 0) {
-    return r;
+  // 获得fd
+  if((func_info = fd_lookup(fd_no, &fd)) < 0) {
+    return func_info;
+  }
+  // 获得对应设备
+  if((func_info = dev_lookup(fd->fd_dev_id, &dev)) < 0) {
+    return func_info;
   }
 
-  r = (*dev->dev_close)(fd);
+  func_info = (*dev->dev_close)(fd);
+  // 关闭了文件，需要同时接触占用文件描述符
   fd_close(fd);
-  return r;
+
+  return func_info;
 }
 
+// 关闭所有文件
 void close_all(void) {
-  int i;
-
-  for (i = 0; i < MAXFD; i++) {
+  // 遍历打开文件列表
+  for (int i = 0; i < MAXFD; i++) {
     close(i);
   }
 }
@@ -130,140 +154,161 @@ void close_all(void) {
  * Post-Condition:
  *   Return 'newfdnum' on success.
  *   Return the corresponding error code on error.
- *
- * Hint:
- *   Use 'fd_lookup' or 'INDEX2FD' to get 'fd' to 'fdnum'.
- *   Use 'fd2data' to get the data address to 'fd'.
- *   Use 'syscall_mem_map' to share the data pages.
  */
-int dup(int oldfdnum, int newfdnum) {
-  int i, r;
-  void *ova, *nva;
+// 复制打开文件的内容到新的文件描述符id
+int dup(int old_fd_no, int new_fd_no) {
+  void *old_file_va, *new_file_va;
+  struct Fd *old_fd, *new_fd;
   u_int pte;
-  struct Fd *oldfd, *newfd;
+  int func_info;
+  int i;
 
-  /* Step 1: Check if 'oldnum' is valid. if not, return an error code, or get 'fd'. */
-  if ((r = fd_lookup(oldfdnum, &oldfd)) < 0) {
-    return r;
+  // 检查旧的文件描述符是否有效，同时获取旧文件描述符
+  if ((func_info = fd_lookup(old_fd_no, &old_fd)) < 0) {
+    return func_info;
   }
 
-  /* Step 2: Close 'newfdnum' to reset content. */
-  close(newfdnum);
-  /* Step 3: Get 'newfd' reffered by 'newfdnum'. */
-  newfd = (struct Fd *)INDEX2FD(newfdnum);
-  /* Step 4: Get data address. */
-  ova = fd2data(oldfd);
-  nva = fd2data(newfd);
-  /* Step 5: Dunplicate the data and 'fd' self from old to new. */
-  if ((r = syscall_mem_map(0, oldfd, 0, newfd, vpt[VPN(oldfd)] & (PTE_D | PTE_LIBRARY))) < 0) {
+  // 无论新文件描述符id是否有效，都强制关闭
+  close(new_fd_no);
+  // 获取新文件描述符
+  // 由于上一步强制关闭了，故不能使用fd_lookup
+  new_fd = (struct Fd *)INDEX2FD(new_fd_no);
+
+  // 复制打开文件的内容
+  old_file_va = fd2data(old_fd);
+  new_file_va = fd2data(new_fd);
+  // 通过建立映射关系复制文件描述符的内容
+  if ((func_info = syscall_mem_map(0, old_fd, 0, new_fd, vpt[VPN(old_fd)] & (PTE_D | PTE_LIBRARY))) < 0) {
     goto err;
   }
 
-  if (vpd[PDX(ova)]) {
+  // 如果页目录有效
+  if (vpd[PDX(old_file_va)]) {
+    // 遍历对应的页表项
     for (i = 0; i < PDMAP; i += PTMAP) {
-      pte = vpt[VPN(ova + i)];
-
+      // 获取页表
+      pte = vpt[VPN(old_file_va + i)];
+      // 如果页表有效
       if (pte & PTE_V) {
-        // should be no error here -- pd is already allocated
-        if ((r = syscall_mem_map(0, (void *)(ova + i), 0, (void *)(nva + i), pte & (PTE_D | PTE_LIBRARY))) < 0) {
+        // 复制页表内容建立映射
+        if ((func_info =
+              syscall_mem_map(
+                0, (void *)(old_file_va + i),
+                0, (void *)(new_file_va + i),
+                pte & (PTE_D | PTE_LIBRARY)
+          )) < 0) {
           goto err;
         }
       }
     }
   }
 
-  return newfdnum;
+  return new_fd_no;
 
+// 异常处理程序
 err:
   /* If error occurs, cancel all map operations. */
-  panic_on(syscall_mem_unmap(0, newfd));
+  // 取消所有地址映射
+  panic_on(syscall_mem_unmap(0, new_fd));
 
   for (i = 0; i < PDMAP; i += PTMAP) {
-    panic_on(syscall_mem_unmap(0, (void *)(nva + i)));
+    panic_on(syscall_mem_unmap(0, (void *)(new_file_va + i)));
   }
 
-  return r;
+  return func_info;
 }
 
 // Overview:
-//  Read at most 'n' bytes from 'fd' at the current seek position into 'buf'.
+//  Read at most 'n' bytes from 'fd' at the current seek position into 'buffer'.
 //
 // Post-Condition:
 //  Update seek position.
 //  Return the number of bytes read successfully.
 //  Return < 0 on error.
-int read(int fdnum, void *buf, u_int n) {
-  int r;
-
-  // Similar to the 'write' function below.
-  // Step 1: Get 'fd' and 'dev' using 'fd_lookup' and 'dev_lookup'.
+// 从当前文件的读写指针继续读取n个字节到bufferfer中
+int read(int fd_no, void *buffer, u_int n) {
   struct Dev *dev;
   struct Fd *fd;
-  /* Exercise 5.10: Your code here. (1/4) */
-  if ((r = fd_lookup(fdnum, &fd)) < 0 || (r = dev_lookup(fd->fd_dev_id, &dev)) < 0) {
-    return r;
+  int func_info;
+
+  // 获得fd
+  if((func_info = fd_lookup(fd_no, &fd)) < 0) {
+    return func_info;
+  }
+  // 获得对应设备
+  if((func_info = dev_lookup(fd->fd_dev_id, &dev)) < 0) {
+    return func_info;
   }
 
-  // Step 2: Check the open mode in 'fd'.
-  // Return -E_INVAL if the file is opened for writing only (O_WRONLY).
-  /* Exercise 5.10: Your code here. (2/4) */
+  // 检查文件读写模式是否符合
   if ((fd->fd_omode & O_ACCMODE) == O_WRONLY) {
     return -E_INVAL;
   }
 
-  // Step 3: Read from 'dev' into 'buf' at the seek position (offset in 'fd').
-  /* Exercise 5.10: Your code here. (3/4) */
-  r = dev->dev_read(fd, buf, n, fd->fd_offset);
+  // 从文件的读写指针继续读n个字节到buffer中
+  func_info = dev->dev_read(fd, buffer, n, fd->fd_offset);
 
-  // Step 4: Update the offset in 'fd' if the read is successful.
+  // 更新文件的读写指针
   /* Hint: DO NOT add a null terminator to the end of the buffer!
-   *  A character buffer is not a C string. Only the memory within [buf, buf+n) is safe to
-   *  use. */
-  /* Exercise 5.10: Your code here. (4/4) */
-  if (r > 0) {
-    fd->fd_offset += r;
+   *  A character bufferfer is not a C string.
+   *  Only the memory within [buffer, buffer+n) is safe to use.
+   */
+  if (func_info > 0) {
+    fd->fd_offset += func_info;
   }
 
-  return r;
+  return func_info;
 }
 
-int readn(int fdnum, void *buf, u_int n) {
-  int m, tot;
+// 从文件中读取n个字节，但做了溢出检查
+int readn(int fd_no, void *buffer, u_int n) {
+  // 当前读取的字节数
+  int offest;
+  int now_read;
 
-  for (tot = 0; tot < n; tot += m) {
-    m = read(fdnum, (char *)buf + tot, n - tot);
+  for (offest = 0; offest < n; offest += now_read) {
+    now_read = read(fd_no, (char *)buffer + offest, n - offest);
 
-    if (m < 0) {
-      return m;
+    // 出错，直接返回
+    if (now_read < 0) {
+      return now_read;
     }
-
-    if (m == 0) {
+    // 溢出检查，不再读取
+    if (now_read == 0) {
       break;
     }
   }
-
-  return tot;
+  // 返回读取的字节数
+  return offest;
 }
 
-int write(int fdnum, const void *buf, u_int n) {
-  int r;
+// 对文件的写
+int write(int fd_no, const void *buffer, u_int n) {
+  int func_info;
   struct Dev *dev;
   struct Fd *fd;
 
-  if ((r = fd_lookup(fdnum, &fd)) < 0 || (r = dev_lookup(fd->fd_dev_id, &dev)) < 0) {
-    return r;
+  // 寻找文件描述符
+  if((func_info = fd_lookup(fd_no, &fd)) < 0) {
+    return func_info;
+  }
+  // 寻找文件所在的设备
+  if((func_info = dev_lookup(fd->fd_dev_id, &dev)) < 0) {
+    return func_info;
   }
 
+  // 检查文件读写模式是否符合
   if ((fd->fd_omode & O_ACCMODE) == O_RDONLY) {
     return -E_INVAL;
   }
 
-  r = dev->dev_write(fd, buf, n, fd->fd_offset);
-  if (r > 0) {
-    fd->fd_offset += r;
+  // 返回文件读写的偏移量
+  func_info = dev->dev_write(fd, buffer, n, fd->fd_offset);
+  if (func_info > 0) {
+    fd->fd_offset += func_info;
   }
 
-  return r;
+  return func_info;
 }
 
 int seek(int fdnum, u_int offset) {

@@ -28,34 +28,30 @@ struct Dev devfile = {
 //  the file descriptor on success,
 //  the underlying error on failure.
 // 按照mode模式打开path的文件，返回文件描述符
-int open(const char *path, int mode) {
+int open(const char *file_path, int mode) {
   // 获取一个新的文件描述符
   struct Fd *fd;
-  // 获取新的文件描述符，将地址保存到fd中
+  // 获取新的文件描述符
   try(fd_alloc(&fd));
 
   // 使用文件服务IPC打开文件
-  try(fsipc_open(path, mode, fd));
+  // 文件服务进程会通过fd设置相关信息
+  try(fsipc_open(file_path, mode, fd));
 
-  // Step 3: Set 'va' to the address of the page where the 'fd''s data is cached, using
-  // 'fd2data'. Set 'size' and 'fileid' correctly with the value in 'fd' as a 'Filefd'.
-  char *va;
-  struct Filefd *ffd;
-  u_int size, file_id;
-  /* Exercise 5.9: Your code here. (3/5) */
-  va = fd2data(fd);
-  ffd = (struct Filefd *)fd;
-  size = ffd->f_file.f_size;
-  file_id = ffd->f_fileid;
+  // 获取文件内容应该映射到的地址
+  char *file_va = fd2data(fd);
+  // 通过指针类型，改变文件描述符地址处信息的解释方式
+  struct Filefd *filefd = (struct Filefd *)fd;
+  // 这些信息之前由文件服务进程设置
+  u_int file_size = filefd->f_file.f_size;
+  u_int file_id = filefd->f_fileid;
 
-  // Step 4: Map the file content using 'fsipc_map'.
-  for (int i = 0; i < size; i += PTMAP) {
-    /* Exercise 5.9: Your code here. (4/5) */
-    try(fsipc_map(file_id, i, va + i));
+  // 将文件的内容映加载到内存中，方式为建立相关的映射关系
+  for (int i = 0; i < file_size; i += PTMAP) {
+    try(fsipc_map(file_id, i, file_va + i));
   }
 
-  // Step 5: Return the number of file descriptor using 'fd2num'.
-  /* Exercise 5.9: Your code here. (5/5) */
+  // 返回文件描述符对应的id
   return fd2num(fd);
 }
 

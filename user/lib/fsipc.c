@@ -73,6 +73,7 @@ int fsipc_open(const char *path, u_int mode, struct Fd *fd) {
 // Returns:
 //  0 on success,
 //  < 0 on failure.
+// 将文件加载进内存，建立一个映射
 int fsipc_map(u_int file_id, u_int offset, void *dst_va) {
   int func_info;
   u_int permission;
@@ -81,10 +82,11 @@ int fsipc_map(u_int file_id, u_int offset, void *dst_va) {
   request->req_fileid = file_id;
   request->req_offset = offset;
 
+  // 向文件服务进程发送简历映射请求、
   if ((func_info = fsipc(FSREQ_MAP, request, dst_va, &permission)) < 0) {
     return func_info;
   }
-
+  // 检查共享页面的权限
   if ((permission & ~(PTE_D | PTE_LIBRARY)) != (PTE_V)) {
     user_panic("fsipc_map: unexpected permissions %08x for dstva %08x", permission, dst_va);
   }
