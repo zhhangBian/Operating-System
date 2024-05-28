@@ -96,34 +96,33 @@ int fsipc_map(u_int file_id, u_int offset, void *dst_va) {
 
 // Overview:
 //  Make a set-file-size request to the file server.
+// 发送一个set_size请求
 int fsipc_set_size(u_int file_id, u_int size) {
-  struct Fsreq_set_size *req;
+  struct Fsreq_set_size *requset = (struct Fsreq_set_size *)fsipcbuf;
+  requset->req_fileid = file_id;
+  requset->req_size = size;
 
-  req = (struct Fsreq_set_size *)fsipcbuf;
-  req->req_fileid = file_id;
-  req->req_size = size;
-  return fsipc(FSREQ_SET_SIZE, req, 0, 0);
+  return fsipc(FSREQ_SET_SIZE, requset, 0, 0);
 }
 
 // Overview:
 //  Make a file-close request to the file server. After this the fileid is invalid.
+// 发送一个关闭文件请求
 int fsipc_close(u_int file_id) {
-  struct Fsreq_close *req;
+  struct Fsreq_close *request = (struct Fsreq_close *)fsipcbuf;
+  request->req_fileid = file_id;
 
-  req = (struct Fsreq_close *)fsipcbuf;
-  req->req_fileid = file_id;
-  return fsipc(FSREQ_CLOSE, req, 0, 0);
+  return fsipc(FSREQ_CLOSE, request, 0, 0);
 }
 
 // Overview:
 //  Ask the file server to mark a particular file block dirty.
 int fsipc_dirty(u_int file_id, u_int offset) {
-  struct Fsreq_dirty *req;
+  struct Fsreq_dirty *request = (struct Fsreq_dirty *)fsipcbuf;
+  request->req_fileid = file_id;
+  request->req_offset = offset;
 
-  req = (struct Fsreq_dirty *)fsipcbuf;
-  req->req_fileid = file_id;
-  req->req_offset = offset;
-  return fsipc(FSREQ_DIRTY, req, 0, 0);
+  return fsipc(FSREQ_DIRTY, request, 0, 0);
 }
 
 // Overview:
@@ -138,7 +137,6 @@ int fsipc_remove(const char *path) {
 
   // 设置文件删除请求
   struct Fsreq_remove *request = (struct Fsreq_remove *)fsipcbuf;
-
   // 复制需要删除的文件路径
   strcpy(request->req_path, path);
 

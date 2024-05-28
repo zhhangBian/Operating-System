@@ -26,8 +26,8 @@ void ipc_send(u_int receive_id, u_int value, const void *src_va, u_int perm) {
   user_assert(func_info == 0);
 }
 
-// 用户态的ipc_receive函数，实值是设置相应的握手信号，被发送进程设置相应信息，直至完成
-// 返回 发送的值，发送进程的id，共享页面的权限  第一个作为返回值，另外两个通过指针实现
+// 用户态的ipc_receive函数，实际设置相应的握手信号，被发送进程设置相应信息，直至完成
+// 返回 发送的值-发送进程的id-共享页面的权限  第一个作为返回值，另外两个通过指针实现
 u_int ipc_recv(u_int *send_id_pointer, // 记录发送进程的id，通过指针完成
                void *dst_va,           // 共享信息存储到的虚拟地址，由自身设置
                u_int *permission_pointer  // 记录共享页面设置的权限，通过指针完成

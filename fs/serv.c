@@ -3,6 +3,8 @@
  * serves IPC requests from other environments.
  */
 
+// 文件服务进程的主函数所在地
+
 #include "serv.h"
 #include <fd.h>
 #include <fsreq.h>
@@ -45,6 +47,7 @@ struct Open opentab[MAXOPEN];
 /*
  * Virtual address at which to receive page mappings containing client requests.
  */
+// 用于接收文件服务发送/需求进程  共享内容的地址
 #define REQVA 0x0ffff000
 
 /*
@@ -124,6 +127,7 @@ int open_lookup(u_int envid, u_int fileid, struct Open **po) {
   *po = o;
   return 0;
 }
+
 /*
  * Functions with the prefix "serve_" are those who
  * conduct the file system requests from clients.
@@ -347,14 +351,15 @@ void serve_sync(u_int envid) {
  * File system use this table and the request number to
  * call the corresponding serve function.
  */
+// 文件服务需求函数
 void *serve_table[MAX_FSREQNO] = {
-    [FSREQ_OPEN]          = serve_open,
-    [FSREQ_MAP]           = serve_map,
-    [FSREQ_SET_SIZE]      = serve_set_size,
-    [FSREQ_CLOSE]         = serve_close,
-    [FSREQ_DIRTY]         = serve_dirty,
-    [FSREQ_REMOVE]        = serve_remove,
-    [FSREQ_SYNC]          = serve_sync,
+  [FSREQ_OPEN]      = serve_open,
+  [FSREQ_MAP]       = serve_map,
+  [FSREQ_SET_SIZE]  = serve_set_size,
+  [FSREQ_CLOSE]     = serve_close,
+  [FSREQ_DIRTY]     = serve_dirty,
+  [FSREQ_REMOVE]    = serve_remove,
+  [FSREQ_SYNC]      = serve_sync,
 };
 
 /*
@@ -367,30 +372,36 @@ void *serve_table[MAX_FSREQNO] = {
  */
 // 文件服务进程的主函数，接收其他进程发送的文件服务请求
 void serve(void) {
-  u_int req, whom, perm;
+  u_int request;
+  u_int permission;
+  u_int send_id;
+  // 文件服务需要调用的函数
   void (*func)(u_int, u_int);
 
+  // 通过循环保持持续响应
   for (;;) {
-    perm = 0;
-    // 一直进行等待
-    req = ipc_recv(&whom, (void *)REQVA, &perm);
+    permission = 0;
+    request = ipc_recv(&send_id, (void *)REQVA, &permission);
 
     // All requests must contain an argument page
-    if (!(perm & PTE_V)) {
-      debugf("Invalid request from %08x: no argument page\n", whom);
-      continue; // just leave it hanging, waiting for the next request.
+    // 所有需求必须共享权限为有效
+    if (!(permission & PTE_V)) {
+      debugf("Invalid request from %08x: no argument page\n", send_id);
+      // just leave it hanging, waiting for the next request.
+      // 等待下一个响应
+      continue;
     }
 
-    // The request number must be valid.
-    if (req < 0 || req >= MAX_FSREQNO) {
-      debugf("Invalid request code %d from %08x\n", req, whom);
+    // 不合理的文件服务请求
+    if (request < 0 || request >= MAX_FSREQNO) {
+      debugf("Invalid request code %d from %08x\n", req, send_id);
       panic_on(syscall_mem_unmap(0, (void *)REQVA));
       continue;
     }
 
-    // Select the serve function and call it.
+    // 调用需求响应函数
     func = serve_table[req];
-    func(whom, REQVA);
+    func(send_id, REQVA);
 
     // Unmap the argument page.
     panic_on(syscall_mem_unmap(0, (void *)REQVA));
