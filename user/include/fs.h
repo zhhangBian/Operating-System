@@ -20,9 +20,11 @@
 #define MAXPATHLEN 1024
 
 // Number of (direct) block pointers in a File descriptor
+// 文件控制块的直接指针个数
 #define NDIRECT 10
+// 文件占据的最大磁盘块数（不直接指针个数）：一个磁盘块能容纳的最多指针数
 #define NINDIRECT (BLOCK_SIZE / 4)
-
+// 文件的最大大小
 #define MAXFILESIZE (NINDIRECT * BLOCK_SIZE)
 
 #define FILE_STRUCT_SIZE 256
@@ -47,6 +49,7 @@ struct File {
   char f_pad[FILE_STRUCT_SIZE - MAXNAMELEN - (3 + NDIRECT) * 4 - sizeof(void *)];
 } __attribute__((aligned(4), packed));
 
+// 一个磁盘块拥有的文件控制块数目
 #define FILE2BLK (BLOCK_SIZE / sizeof(struct File))
 
 // 常规文件类型

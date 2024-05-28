@@ -22,11 +22,11 @@
 struct Open {
   // 指向打开文件的指针
   struct File *o_file;
-  // 打开文件的id
+  // open块自身的id
   u_int o_fileid;
   // 文件的打开方式
   int o_mode;
-  // 文件描述符
+  // 文件描述符的地址，通过地址访问
   struct Filefd *o_ff;
 };
 
@@ -58,14 +58,15 @@ struct Open opentab[MAXOPEN];
 void serve_init(void) {
   int i;
   // Set virtual address to map.
-  u_int va = FILEVA;
+  u_int virtual_address = FILEVA;
 
   // Initial array opentab.
   // 初始化打开文件记录表
+  // 设置opentab的地址，存储在FILEVA，和Filefd 是一一对应的关系
   for (i = 0; i < MAXOPEN; i++) {
     opentab[i].o_fileid = i;
-    opentab[i].o_ff = (struct Filefd *)va;
-    va += BLOCK_SIZE;
+    opentab[i].o_ff = (struct Filefd *)virtual_address;
+    virtual_address += BLOCK_SIZE;
   }
 }
 
@@ -77,23 +78,37 @@ void serve_init(void) {
  * Return:
  * 0 on success, - E_MAX_OPEN on error
  */
-int open_alloc(struct Open **o) {
-  int i, r;
+// 获取一个新的打开文件描述
+int open_alloc(struct Open **open_pointer) {
+  int func_info;
+  int i;
 
   // Find an available open-file table entry
   for (i = 0; i < MAXOPEN; i++) {
+    // 查看Filefd地址对应的页表项是否有效
+    // opentab作为数组，其中元素已经分配了物理内存，故通过指针查看别的地方
     switch (pageref(opentab[i].o_ff)) {
-    case 0:
-      if ((r = syscall_mem_alloc(0, opentab[i].o_ff, PTE_D | PTE_LIBRARY)) < 0) {
-        return r;
-      }
-    case 1:
-      *o = &opentab[i];
-      memset((void *)opentab[i].o_ff, 0, BLOCK_SIZE);
-      return (*o)->o_fileid;
+      // 无效则分配内存
+      case 0:
+        if ((func_info = syscall_mem_alloc(0, opentab[i].o_ff, PTE_D | PTE_LIBRARY)) < 0) {
+          return func_info;
+        }
+        // 到下面函数进行初始化
+      // 只打开一次，曾经被使用过，但现在不被任何用户进程使用的文件，清零后复用
+      case 1:
+        // 通过指针返回
+        *open_pointer = &opentab[i];
+        // 初始化：清零
+        memset((void *)opentab[i].o_ff, 0, BLOCK_SIZE);
+        // 返回open块的id
+        return (*open_pointer)->o_fileid;
+        break;
+      // 其余情况继续查找
+      default:
+        continue;
     }
   }
-
+  // 没有可用的，报错
   return -E_MAX_OPEN;
 }
 
@@ -111,20 +126,22 @@ int open_alloc(struct Open **o) {
  * 0 on success, -E_INVAL on error (fileid illegal or file not open by envid)
  *
  */
-int open_lookup(u_int envid, u_int fileid, struct Open **po) {
-  struct Open *o;
-
-  if (fileid >= MAXOPEN) {
+// 获取对应id的open块
+int open_lookup(u_int envid, u_int open_id, struct Open **open_pointer) {
+  struct Open *open;
+  // 检查id是否有效
+  if (open_id >= MAXOPEN) {
     return -E_INVAL;
   }
 
-  o = &opentab[fileid];
-
-  if (pageref(o->o_ff) <= 1) {
+  // 获取open块
+  open = &opentab[open_id];
+  // 判断是否有效
+  if (pageref(open->o_ff) <= 1) {
     return -E_INVAL;
   }
 
-  *po = o;
+  *open_pointer = open;
   return 0;
 }
 
@@ -152,47 +169,56 @@ int open_lookup(u_int envid, u_int fileid, struct Open **po) {
  * if Success, return the FileFd page to the caller by ipc_send,
  * Otherwise, use ipc_send to return the error value to the caller.
  */
-void serve_open(u_int envid, struct Fsreq_open *rq) {
-  struct File *f;
-  struct Filefd *ff;
-  int r;
-  struct Open *o;
+// 文件服务进程的打开文件操作
+// 如果出现异常，终止函数，使用ipc_send发送回信息
+void serve_open(u_int envid, struct Fsreq_open *request) {
+  struct File *file;
+  struct Filefd *file_fd;
+  struct Open *open;
+  int func_info;
 
-  // Find a file id.
-  if ((r = open_alloc(&o)) < 0) {
-    ipc_send(envid, r, 0, 0);
+  // 申请一个存储文件打开信息的open控制块
+  if ((func_info = open_alloc(&open)) < 0) {
+    ipc_send(envid, func_info, 0, 0);
     return;
   }
 
-  if ((rq->req_omode & O_CREAT) && (r = file_create(rq->req_path, &f)) < 0 && r != -E_FILE_EXISTS) {
-    ipc_send(envid, r, 0, 0);
+  // 如果文件请求是 不存在则创建 访问文件模式
+  if (request->req_omode & O_CREAT) {
+    // 创建文件
+    func_info = file_create(request->req_path, &file);
+    // 如果发生异常  且不是  文件已存在异常
+    if(func_info < 0 && func_info != -E_FILE_EXISTS) {
+      ipc_send(envid, func_info, 0, 0);
+      return;
+    }
+  }
+
+  // 使用file_open打开文件
+  if ((func_info = file_open(request->req_path, &file)) < 0) {
+    ipc_send(envid, func_info, 0, 0);
     return;
   }
 
-  // Open the file.
-  if ((r = file_open(rq->req_path, &f)) < 0) {
-    ipc_send(envid, r, 0, 0);
-    return;
-  }
-
-  // Save the file pointer.
-  o->o_file = f;
+  // 保存文件到open控制块
+  open->o_file = file;
 
   // If mode include O_TRUNC, set the file size to 0
-  if (rq->req_omode & O_TRUNC) {
-    if ((r = file_set_size(f, 0)) < 0) {
-      ipc_send(envid, r, 0, 0);
+  if (request->req_omode & O_TRUNC) {
+    if ((func_info = file_set_size(file, 0)) < 0) {
+      ipc_send(envid, func_info, 0, 0);
     }
   }
 
   // Fill out the Filefd structure
-  ff = (struct Filefd *)o->o_ff;
-  ff->f_file = *f;
-  ff->f_fileid = o->o_fileid;
-  o->o_mode = rq->req_omode;
-  ff->f_fd.fd_omode = o->o_mode;
-  ff->f_fd.fd_dev_id = devfile.dev_id;
-  ipc_send(envid, 0, o->o_ff, PTE_D | PTE_LIBRARY);
+  file_fd = (struct Filefd *)open->o_ff;
+  file_fd->f_file = *file;
+  file_fd->f_fileid = open->o_fileid;
+  open->o_mode = request->req_omode;
+  file_fd->f_fd.fd_omode = open->o_mode;
+  file_fd->f_fd.fd_dev_id = devfile.dev_id;
+
+  ipc_send(envid, 0, open->o_ff, PTE_D | PTE_LIBRARY);
 }
 
 /*

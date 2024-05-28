@@ -96,8 +96,8 @@ void write_block(u_int block_no) {
 //  to 1 if the block was loaded off disk to satisfy this request. (Isnew
 //  lets callers like file_get_block clear any memory-only fields
 //  from the disk blocks when they come in off disk.)
-
-// 将指定编号的磁盘块读入到内存中，自动处理原先未分配物理内存的情况
+// 将指定编号的磁盘块读入到内存中，将内存中的虚拟地址保存到指针中
+// 自动处理原先未分配物理内存的情况
 int read_block(u_int block_no,  // 读取的磁盘块的块号
                void **block_va_pointer, // 记录磁盘块在虚拟内存的地址，NULL则不记录
                u_int *if_not_mapped_before  // 记录原先是否已经被读入内存，NULL则不记录
@@ -115,7 +115,7 @@ int read_block(u_int block_no,  // 读取的磁盘块的块号
   // 获取磁盘块在虚拟内存中的相应地址
   void *virtual_address = disk_addr(block_no);
 
-  // 如果磁盘块原先已经被读入内存
+  // 如果磁盘块原先已经被读入内存，不需要操作
   if (block_is_mapped(block_no)) {
     if (if_not_mapped_before) {
       *if_not_mapped_before = 0;
@@ -145,7 +145,7 @@ int read_block(u_int block_no,  // 读取的磁盘块的块号
 //  Allocate a page to cache the disk block.
 // 为磁盘块在内存中分配物理内存，建立映射
 int map_block(u_int block_no) {
-  // 检查是否已经建立了映射
+  // 如果已经建立了映射，则不需要再建立
   if (block_is_mapped(block_no)) {
     return 0;
   }
@@ -210,16 +210,19 @@ void free_block(u_int block_no) {
 // Post-Condition:
 //  Return block number allocated on success,
 //  Return -E_NO_DISK if we are out of blocks.
+// 获得一个空闲磁盘块，返回其磁盘块号
 int alloc_block_num(void) {
   int block_no;
-  // walk through this bitmap, find a free one and mark it as used, then sync
-  // this block to IDE disk (using `write_block`) from memory.
+  // 遍历位图，找到一个空闲磁盘块
+  // 返回前写回磁盘块的内容到磁盘
   for (block_no = 3; block_no < super->s_nblocks; block_no++) {
     // 通过位图判断磁盘块未被使用
     if (bitmap[block_no / 32] & (1 << (block_no % 32))) {
       // 将这个磁盘块标记为在被使用
       bitmap[block_no / 32] &= ~(1 << (block_no % 32));
+      // 将磁盘块的内容写回到磁盘中去
       write_block(block_no / BLOCK_SIZE_BIT + 2); // write to disk.
+
       return block_no;
     }
   }
@@ -229,21 +232,24 @@ int alloc_block_num(void) {
 
 // Overview:
 //  Allocate a block -- first find a free block in the bitmap, then map it into memory.
+// 找到一个空闲的磁盘块，返回对应的磁盘块号
 int alloc_block(void) {
-  int func_info;
   int block_no;
-  // Step 1: find a free block.
-  if ((block_no = alloc_block_num()) < 0) { // failed.
+  int func_info;
+
+  // 找到一个磁盘块
+  if ((block_no = alloc_block_num()) < 0) {
     return block_no;
   }
 
-  // Step 2: map this block into memory.
+  // 将磁盘块加载到内存中：建立映射
   if ((func_info = map_block(block_no)) < 0) {
+    // 如果失败，则不占用磁盘，恢复位图
     free_block(block_no);
     return func_info;
   }
 
-  // Step 3: return block number.
+  // 返回磁盘块号
   return block_no;
 }
 
@@ -354,9 +360,9 @@ void fs_init(void) {
 
 // Overview:
 //  Like pgdir_walk but for files.
-//  Find the disk block number slot for the 'file_block_no'th block in file 'f'. Then, set
-//  '*ppdiskblock_no' to point to that slot. The slot will be one of the f->f_direct[] entries,
-//  or an entry in the indirect block.
+//  Find the disk block number slot for the 'file_block_no'th block in file 'f'.
+//  Then, set '*ppdiskblock_no' to point to that slot.
+//  The slot will be one of the f->f_direct[] entries, or an entry in the indirect block.
 //  When 'alloc' is set, this function will allocate an indirect block if necessary.
 //
 // Post-Condition:
@@ -365,41 +371,54 @@ void fs_init(void) {
 //  Return -E_NO_DISK if there's no space on the disk for an indirect block.
 //  Return -E_NO_MEM if there's not enough memory for an indirect block.
 //  Return -E_INVAL if file_block_no is out of range (>= NINDIRECT).
-
-int file_block_walk(struct File *f, u_int file_block_no, uint32_t **ppdiskblock_no, u_int alloc) {
+// 找到文件的第f_no个磁盘块，将文件控制块中存磁盘块号的地址保存到指针中
+// 按照alloc设置加载到内存中
+int file_block_walk(struct File *file,  // 操作的文件
+                    u_int file_block_no,  // 文件的第f_no个磁盘块
+                    uint32_t **block_no_pointer_pointer,  // 处理对应磁盘块号的指针
+                    u_int alloc // 如果没有磁盘块是否需要分配
+  ) {
+  uint32_t *block_no_pointer;
+  uint32_t *block_va;
   int func_info;
-  uint32_t *ptr;
-  uint32_t *blk;
 
+  // 磁盘块数由直接指针控制
   if (file_block_no < NDIRECT) {
-    // Step 1: if the target block is corresponded to a direct pointer, just return the
-    // disk block number.
-    ptr = &f->f_direct[file_block_no];
-  } else if (file_block_no < NINDIRECT) {
-    // Step 2: if the target block is corresponded to the indirect block, but there's no
-    //  indirect block and `alloc` is set, create the indirect block.
-    if (f->f_indirect == 0) {
+    // 将指针指向对应的磁盘块号
+    block_no_pointer = &file->f_direct[file_block_no];
+  }
+  // 由间接指针控制
+  else if (file_block_no < NINDIRECT) {
+    // 如果没有保存间接指针的磁盘块
+    // 按alloc获取
+    if (file->f_indirect == 0) {
+      // 不需要获取磁盘块，报错
       if (alloc == 0) {
         return -E_NOT_FOUND;
       }
 
-      if ((func_info = alloc_block()) < 0) {
-        return func_info;
+      // 获取一个磁盘块用作间接指针区域
+      int block_no;
+      if ((block_no = alloc_block()) < 0) {
+        return block_no;
       }
-      f->f_indirect = func_info;
+      file->f_indirect = block_no;
     }
 
-    // Step 3: read the new indirect block to memory.
-    if ((func_info = read_block(f->f_indirect, (void **)&blk, 0)) < 0) {
+    // 将指定编号的磁盘块读入到内存中
+    if ((func_info = read_block(file->f_indirect, (void **)&block_va, 0)) < 0) {
       return func_info;
     }
-    ptr = blk + file_block_no;
-  } else {
+    // 保存磁盘块号 对应的指针 为 保存指针的磁盘地址+偏移量
+    block_no_pointer = block_va + file_block_no;
+  }
+  // 错误的磁盘块号
+  else {
     return -E_INVAL;
   }
 
-  // Step 4: store the result into *ppdiskblock_no, and return 0.
-  *ppdiskblock_no = ptr;
+  // 保存  磁盘块号所在地址  到指针中
+  *block_no_pointer_pointer = block_no_pointer;
   return 0;
 }
 
@@ -414,30 +433,32 @@ int file_block_walk(struct File *f, u_int file_block_no, uint32_t **ppdiskblock_
 //   -E_NO_DISK: if a block needed to be allocated but the disk is full.
 //   -E_NO_MEM: if we're out of memory.
 //   -E_INVAL: if file_block_no is out of range.
+// 获取文件块对应磁盘块号（相对文件）对应的  磁盘块号（相对磁盘）
+// 如果磁盘块没有被加载到内存中，按alloc设置加载
+int file_map_block(struct File *file, u_int file_block_no, u_int *disk_block_no, u_int alloc) {
+  uint32_t *block_no_pointer;
+  int func_info;
 
-int file_map_block(struct File *file, u_int file_block_no, u_int *diskblock_no, u_int alloc) {
-  int r;
-  uint32_t *ptr;
-
-  // Step 1: find the pointer for the target block.
-  if ((r = file_block_walk(file, file_block_no, &ptr, alloc)) < 0) {
-    return r;
+  // 找到文件的第f_no个磁盘块，将文件控制块中存磁盘块号的地址保存到指针中
+  if ((func_info = file_block_walk(file, file_block_no, &block_no_pointer, alloc)) < 0) {
+    return func_info;
   }
 
-  // Step 2: if the block not exists, and create is set, alloc one.
-  if (*ptr == 0) {
+  // 如果磁盘块不存在，按alloc创建
+  if (*block_no_pointer == 0) {
+    // 不需要创建，则报错
     if (alloc == 0) {
       return -E_NOT_FOUND;
     }
-
-    if ((r = alloc_block()) < 0) {
-      return r;
+    // 创建一个磁盘块供使用
+    if ((func_info = alloc_block()) < 0) {
+      return func_info;
     }
-    *ptr = r;
+    *block_no_pointer = func_info;
   }
 
-  // Step 3: set the pointer to the block in *diskblock_no and return 0.
-  *diskblock_no = *ptr;
+  // 将对应的结果保存到指针中
+  *disk_block_no = *block_no_pointer;
   return 0;
 }
 
@@ -466,15 +487,14 @@ int file_clear_block(struct File *f, u_int file_block_no) {
 //
 // Post-Condition:
 //  return 0 on success, and read the data to `block_va_pointer`, return <0 on error.
-// 获取文件对应的磁盘块，并将其读入内存
-int file_get_block(struct File *file, u_int fileb_no, void **block_va_pointer) {
+// 获取文件第block_no个磁盘块，保存到指针中，没有则创建
+int file_get_block(struct File *file, u_int file_block_no, void **block_va_pointer) {
   int func_info;
   u_int disk_block_no;
   u_int if_not_mapped_before;
 
-  // Step 1: find the disk block number is `f` using `file_map_block`.
-  // 为即将读入内存的磁盘块分配物理内存
-  if ((func_info = file_map_block(file, fileb_no, &disk_block_no, 1)) < 0) {
+  // 获取文件块对应磁盘块号（相对文件）对应的  磁盘块号（相对磁盘）
+  if ((func_info = file_map_block(file, file_block_no, &disk_block_no, 1)) < 0) {
     return func_info;
   }
 
@@ -505,21 +525,20 @@ int file_dirty(struct File *f, u_int offset) {
 // Post-Condition:
 //  Return 0 on success, and set the pointer to the target file in `*file`.
 //  Return the underlying error if an error occurs.
-// 查找某个目录下是否存在指定文件名的文件，保存到指针中
+// 在目录下查找特定名字的文件，保存到指针中
 int dir_lookup(struct File *dictionary, char *name, struct File **file_pointer) {
   // 获取目录占有的总磁盘块数
   u_int block_num = dictionary->f_size / PAGE_SIZE;
+  void *block;
 
-  // 遍历每一个磁盘块，寻找文件
+  // 遍历目录占据的磁盘块，寻找文件控制块
   for (int i = 0; i < block_num; i++) {
-    // Read the i'th block of 'dir' and get its address in 'block_va' using 'file_get_block'.
-    void *block_va;
-    try(file_get_block(dictionary, i, &block_va));
+    // 获取文件第i个磁盘块，保存到block指针中
+    try(file_get_block(dictionary, i, &block));
 
-    struct File *files = (struct File *)block_va;
-
-    // 遍历磁盘块中的所有文件，比较文件名
-    for (struct File *file = files; file < files + FILE2BLK; ++file) {
+    struct File *files = (struct File *)block;
+    // 遍历磁盘块中的所有文件控制块，比较文件名
+    for (struct File *file = files; file < files + FILE2BLK; file++) {
       // 比较文件名来判断是否为所需文件
       if (strcmp(name, file->f_name) == 0) {
         *file_pointer = file;
@@ -536,44 +555,46 @@ int dir_lookup(struct File *dictionary, char *name, struct File **file_pointer) 
 // Overview:
 //  Alloc a new File structure under specified directory. Set *file
 //  to point at a free File structure in dir.
-int dir_alloc_file(struct File *dir, struct File **file) {
-  int r;
-  u_int nblock, i, j;
-  void *blk;
-  struct File *f;
+// 在目录下创建文件，把文件保存到指针
+int dir_alloc_file(struct File *dictionary, struct File **file_pointer) {
+  // 目录占据的磁盘块数目
+  u_int block_num = dictionary->f_size / BLOCK_SIZE;
+  struct File *file;
+  void *block;
 
-  nblock = dir->f_size / BLOCK_SIZE;
+  int func_info;
 
-  for (i = 0; i < nblock; i++) {
-    // read the block.
-    if ((r = file_get_block(dir, i, &blk)) < 0) {
-      return r;
+  for (int i = 0; i < block_num; i++) {
+    // 获取文件第i个磁盘块
+    if ((func_info = file_get_block(dictionary, i, &block)) < 0) {
+      return func_info;
     }
-
-    f = blk;
-
-    for (j = 0; j < FILE2BLK; j++) {
-      if (f[j].f_name[0] == '\0') { // found free File structure.
-        *file = &f[j];
+    // 遍历磁盘块中的文件控制块
+    file = block;
+    for (int j = 0; j < FILE2BLK; j++) {
+      // 遇到空文件
+      if (file[j].f_name[0] == '\0') {
+        *file_pointer = &file[j];
         return 0;
       }
     }
   }
 
-  // no free File structure in exists data block.
-  // new data block need to be created.
-  dir->f_size += BLOCK_SIZE;
-  if ((r = file_get_block(dir, i, &blk)) < 0) {
-    return r;
+  // 原目录的磁盘块下没有空余的文件控制块
+  dictionary->f_size += BLOCK_SIZE;
+  // 为目录增加一个磁盘块
+  if ((func_info = file_get_block(dictionary, block_num, &block)) < 0) {
+    return func_info;
   }
-  f = blk;
-  *file = &f[0];
+  file = block;
+  *file_pointer = file;
 
   return 0;
 }
 
 // Overview:
 //  Skip over slashes.
+// 跳过路径中的 '/'
 char *skip_slash(char *p) {
   while (*p == '/') {
     p++;
@@ -589,66 +610,79 @@ char *skip_slash(char *p) {
 //  the file is in.
 //  If we cannot find the file but find the directory it should be in, set
 //  *pdir and copy the final path element into lastelem.
-int walk_path(char *path, struct File **pdir, struct File **pfile, char *lastelem) {
-  char *p;
-  char name[MAXNAMELEN];
-  struct File *dir, *file;
-  int r;
+// 解析路径，根据路径不断找到目录下的文件，通过文件控制块返回
+// 使用指针保存文件和文件所在的目录
+// 如果解析到的目录下不包含文件，则将last_element设置为最后找不到的文件名
+int walk_path(char *path, struct File **dictionary_pointer, struct File **file_pointer, char *last_element) {
+  // 当前正在解析的文件/文件夹名
+  char name[MAXNAMELEN] = {0};
+  // 解析文件名的临时指针，保存文件名的开始位置
+  char *name_begin;
+  // 当前的文件
+  struct File *file = &(super->s_root);
+  // 当前所在的目录
+  struct File *dictionary = 0;
 
-  // start at the root.
+  int func_info;
+
+  // 跳过 '/'
   path = skip_slash(path);
-  file = &super->s_root;
-  dir = 0;
-  name[0] = 0;
 
-  if (pdir) {
-    *pdir = 0;
+  // 初始化返回值
+  if (dictionary_pointer) {
+    *dictionary_pointer = 0;
   }
+  *file_pointer = 0;
 
-  *pfile = 0;
-
-  // find the target file by name recursively.
+  // 解析路径
   while (*path != '\0') {
-    dir = file;
-    p = path;
-
+    // 保存当前所在文件夹为上一次解析的文件
+    dictionary = file;
+    // 保存文件/文件夹名的起始地址
+    name_begin = path;
     while (*path != '/' && *path != '\0') {
       path++;
     }
-
-    if (path - p >= MAXNAMELEN) {
+    // 如果文件/文件夹名过长
+    if (path - name_begin >= MAXNAMELEN) {
       return -E_BAD_PATH;
     }
+    // 获得解析到的文件/文件夹名
+    memcpy(name, name_begin, path - name_begin);
+    name[path - name_begin] = '\0';
 
-    memcpy(name, p, path - p);
-    name[path - p] = '\0';
+    // 跳过 '/'
     path = skip_slash(path);
-    if (dir->f_type != FTYPE_DIR) {
+    if (dictionary->f_type != FTYPE_DIR) {
       return -E_NOT_FOUND;
     }
 
-    if ((r = dir_lookup(dir, name, &file)) < 0) {
-      if (r == -E_NOT_FOUND && *path == '\0') {
-        if (pdir) {
-          *pdir = dir;
+    // 在当前目录下找到文件
+    if ((func_info = dir_lookup(dictionary, name, &file)) < 0) {
+      // 如果没找到文件 且 解析到路径尾
+      if (func_info == -E_NOT_FOUND && *path == '\0') {
+        // 如果需要保存最后的文件夹
+        if (dictionary_pointer) {
+          *dictionary_pointer = dictionary;
+        }
+        // 保存找不到的文件名
+        if (last_element) {
+          strcpy(last_element, name);
         }
 
-        if (lastelem) {
-          strcpy(lastelem, name);
-        }
-
-        *pfile = 0;
+        *file_pointer = 0;
       }
 
-      return r;
+      return func_info;
     }
   }
 
-  if (pdir) {
-    *pdir = dir;
+  // 保存返回值
+  if (dictionary_pointer) {
+    *dictionary_pointer = dictionary;
   }
+  *file_pointer = file;
 
-  *pfile = file;
   return 0;
 }
 
@@ -658,6 +692,7 @@ int walk_path(char *path, struct File **pdir, struct File **pfile, char *lastele
 // Post-Condition:
 //  On success set *pfile to point at the file and return 0.
 //  On error return < 0.
+// 通过解析path得到文件
 int file_open(char *path, struct File **file) {
   return walk_path(path, 0, file, 0);
 }
@@ -668,25 +703,31 @@ int file_open(char *path, struct File **file) {
 // Post-Condition:
 //  On success set *file to point at the file and return 0.
 //  On error return < 0.
-int file_create(char *path, struct File **file) {
+// 按照路径创建文件
+int file_create(char *path, struct File **file_pointer) {
   char name[MAXNAMELEN];
-  int r;
-  struct File *dir, *f;
+  struct File *dictionary;
+  struct File *file;
+  int func_info;
 
-  if ((r = walk_path(path, &dir, &f, name)) == 0) {
+  func_info = walk_path(path, &dictionary, &file, name);
+  // 如果文件已经存在
+  if (func_info == 0) {
     return -E_FILE_EXISTS;
   }
 
-  if (r != -E_NOT_FOUND || dir == 0) {
-    return r;
+  // 目录不存在
+  if (func_info != -E_NOT_FOUND || dictionary == 0) {
+    return func_info;
   }
-
-  if (dir_alloc_file(dir, &f) < 0) {
-    return r;
+  // 在目录下创建文件，获得文件控制块
+  if (dir_alloc_file(dictionary, &file) < 0) {
+    return func_info;
   }
+  // 为文件控制块拷贝名字
+  strcpy(file->f_name, name);
 
-  strcpy(f->f_name, name);
-  *file = f;
+  *file_pointer = file;
   return 0;
 }
 

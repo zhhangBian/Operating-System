@@ -7,24 +7,24 @@
  *   Return the number of virtual pages mapped to this physical page among all envs.
  *   if the virtual address is valid.
  *   Otherwise return 0.
- *
- * Hint:
- *   Use 'vpd' and 'vpt'.
  */
-int pageref(void *v) {
-	u_int pte;
+// 获得虚拟地址是否有效，对应的物理内存块映射次数
+int pageref(void *virtual_address) {
+	u_int pde, pte;
 
-	/* Step 1: Check the page directory. */
-	if (!(vpd[PDX(v)] & PTE_V)) {
+	// 检查页目录是否有效
+  pde = vpd[PDX(virtual_address)];
+  // 检查页目录是否有效
+	if (!(pde & PTE_V)) {
 		return 0;
 	}
 
-	/* Step 2: Check the page table. */
-	pte = vpt[VPN(v)];
-
+	// 获取页表
+	pte = vpt[VPN(virtual_address)];
+  // 检查页表是否有效
 	if (!(pte & PTE_V)) {
 		return 0;
 	}
-	/* Step 3: Return the result. */
+	// 获取对应物理页面的对应映射次数
 	return pages[PPN(pte)].pp_ref;
 }

@@ -140,7 +140,8 @@ int sync(void);
 #define O_RDWR 0x0002
 // 全模式：用于匹配模式
 #define O_ACCMODE 0x0003
-#define O_CREAT 0x0100	 /* create if nonexistent */
+// 不存在则创建模式
+#define O_CREAT 0x0100
 #define O_TRUNC 0x0200	 /* truncate to zero length */
 
 // Unimplemented open modes
