@@ -57,6 +57,8 @@ struct Stat {
 };
 
 // file descriptor + file
+// 将文件描述符fd共享到用户进程时，实际上是在共享Filefd
+// 通过指针的强制转换改变了对地址处数据的解释方式
 struct Filefd {
 	struct Fd f_fd;
 	u_int f_fileid;

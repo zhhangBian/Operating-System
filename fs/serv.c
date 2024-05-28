@@ -409,10 +409,11 @@ int main() {
   user_assert(sizeof(struct File) == FILE_STRUCT_SIZE);
 
   debugf("FS is running\n");
-
+  // 文件服务进程初始化
   serve_init();
+  // 文件系统初始化
   fs_init();
-
+  // 开始运行文件服务进程
   serve();
 
   return 0;

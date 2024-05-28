@@ -31,6 +31,7 @@ struct Dev devfile = {
 int open(const char *path, int mode) {
   // 获取一个新的文件描述符
   struct Fd *fd;
+  // 获取新的文件描述符，将地址保存到fd中
   try(fd_alloc(&fd));
 
   // 使用文件服务IPC打开文件

@@ -25,6 +25,7 @@ enum {
 
 // open操作的文件ipc请求
 struct Fsreq_open {
+  // 需要打开文件的路径
 	char req_path[MAXPATHLEN];
 	u_int req_omode;
 };

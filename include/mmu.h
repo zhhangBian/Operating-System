@@ -8,8 +8,10 @@
 #define NASID 256
 // PAGE_SIZE 为 页 对应的字节大小
 #define PAGE_SIZE 4096
+// 每个页表项映射的字节数：和页大小相同
 #define PTMAP PAGE_SIZE
-#define PDMAP (4 * 1024 * 1024) // bytes mapped by a page directory entry
+// 每个页目录映射的字节数：4MB
+#define PDMAP (4 * 1024 * 1024)
 #define PGSHIFT 12
 #define PDSHIFT 22 // log2(PDMAP)
 

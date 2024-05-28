@@ -7,7 +7,8 @@
 // fsipc.c：实现与文件系统服务进程的交互
 // 文件系统的大部分操作并不在内核态中完成，而是交由一个文件系统服务进程处理
 
-// 缓冲区
+// 缓冲区：数组实际上是申请了空间
+// 缓冲区大小为一个页面，还进行了对齐
 u_char fsipcbuf[PAGE_SIZE] __attribute__((aligned(PAGE_SIZE)));
 
 // Overview:
@@ -25,7 +26,6 @@ u_char fsipcbuf[PAGE_SIZE] __attribute__((aligned(PAGE_SIZE)));
 //  < 0 on failure.
 // 文件服务IPC，向文件服务进程发送信息，并接受返回信息
 static int fsipc(u_int type, void *request, void *dst_va, u_int *permission) {
-  u_int send_id;
   // 强制向第二个进程发送，即文件服务进程，必须使其为第二个进程
   ipc_send(envs[1].env_id, // 接受进程的envid：必须为文件服务进程
            type,      // 发送的值：文件操作的类型
@@ -33,6 +33,8 @@ static int fsipc(u_int type, void *request, void *dst_va, u_int *permission) {
            PTE_D);    // 共享区域的权限
   // 等待从文件服务接受信息
   // 接受到的页面的权限由文件服务进程设置
+  // 实际上不关注发送id：肯定是文件服务进程，一定是第二个进程
+  u_int send_id;
   return ipc_recv(&send_id, dst_va, permission);
 }
 

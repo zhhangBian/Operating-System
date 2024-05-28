@@ -12,9 +12,11 @@
 #define BLOCK_SIZE_BIT (BLOCK_SIZE * 8)
 
 // Maximum size of a filename (a single path component), including null
+// 最大文件名长度
 #define MAXNAMELEN 128
 
 // Maximum size of a complete pathname, including null
+// 最大路径长度
 #define MAXPATHLEN 1024
 
 // Number of (direct) block pointers in a File descriptor
