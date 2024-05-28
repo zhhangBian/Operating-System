@@ -142,7 +142,8 @@ int sync(void);
 #define O_ACCMODE 0x0003
 // 不存在则创建模式
 #define O_CREAT 0x0100
-#define O_TRUNC 0x0200	 /* truncate to zero length */
+// 所见到0长度
+#define O_TRUNC 0x0200
 
 // Unimplemented open modes
 #define O_EXCL 0x0400  /* error if already exists */

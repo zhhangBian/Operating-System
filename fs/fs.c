@@ -743,6 +743,7 @@ int file_create(char *path, struct File **file_pointer) {
 //  (Remember to clear the f->f_indirect pointer so you'll know whether it's valid!)
 //
 // Hint: use file_clear_block.
+// 缩小文件尺寸
 void file_truncate(struct File *f, u_int newsize) {
   u_int block_no, old_nblocks, new_nblocks;
 

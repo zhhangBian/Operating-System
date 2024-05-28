@@ -81,10 +81,9 @@ void serve_init(void) {
 // 获取一个新的打开文件描述
 int open_alloc(struct Open **open_pointer) {
   int func_info;
-  int i;
 
   // Find an available open-file table entry
-  for (i = 0; i < MAXOPEN; i++) {
+  for (int i = 0; i < MAXOPEN; i++) {
     // 查看Filefd地址对应的页表项是否有效
     // opentab作为数组，其中元素已经分配了物理内存，故通过指针查看别的地方
     switch (pageref(opentab[i].o_ff)) {
@@ -93,7 +92,7 @@ int open_alloc(struct Open **open_pointer) {
         if ((func_info = syscall_mem_alloc(0, opentab[i].o_ff, PTE_D | PTE_LIBRARY)) < 0) {
           return func_info;
         }
-        // 到下面函数进行初始化
+        // 不break，继续到下面函数进行初始化
       // 只打开一次，曾经被使用过，但现在不被任何用户进程使用的文件，清零后复用
       case 1:
         // 通过指针返回
@@ -173,7 +172,6 @@ int open_lookup(u_int envid, u_int open_id, struct Open **open_pointer) {
 // 如果出现异常，终止函数，使用ipc_send发送回信息
 void serve_open(u_int envid, struct Fsreq_open *request) {
   struct File *file;
-  struct Filefd *file_fd;
   struct Open *open;
   int func_info;
 
@@ -200,25 +198,25 @@ void serve_open(u_int envid, struct Fsreq_open *request) {
     return;
   }
 
-  // 保存文件到open控制块
-  open->o_file = file;
-
-  // If mode include O_TRUNC, set the file size to 0
+  // 如果是  缩减到0长度  模式
   if (request->req_omode & O_TRUNC) {
     if ((func_info = file_set_size(file, 0)) < 0) {
       ipc_send(envid, func_info, 0, 0);
     }
   }
 
-  // Fill out the Filefd structure
-  file_fd = (struct Filefd *)open->o_ff;
+  // 记录打开信息
+  open->o_file = file;
+  open->o_mode = request->req_omode;
+  // 填写Filefd内容
+  struct Filefd *file_fd = open->o_ff;
   file_fd->f_file = *file;
   file_fd->f_fileid = open->o_fileid;
-  open->o_mode = request->req_omode;
-  file_fd->f_fd.fd_omode = open->o_mode;
+  file_fd->f_fd.fd_omode = request->req_omode;
+  // 设置文件描述符对应的设备为devfile
   file_fd->f_fd.fd_dev_id = devfile.dev_id;
 
-  ipc_send(envid, 0, open->o_ff, PTE_D | PTE_LIBRARY);
+  ipc_send(envid, 0, file_fd, PTE_D | PTE_LIBRARY);
 }
 
 /*
