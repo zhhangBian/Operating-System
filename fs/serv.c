@@ -394,13 +394,13 @@ void serve(void) {
 
     // 不合理的文件服务请求
     if (request < 0 || request >= MAX_FSREQNO) {
-      debugf("Invalid request code %d from %08x\n", req, send_id);
+      debugf("Invalid request code %d from %08x\n", request, send_id);
       panic_on(syscall_mem_unmap(0, (void *)REQVA));
       continue;
     }
 
     // 调用需求响应函数
-    func = serve_table[req];
+    func = serve_table[request];
     func(send_id, REQVA);
 
     // Unmap the argument page.
