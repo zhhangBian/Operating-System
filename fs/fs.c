@@ -761,7 +761,7 @@ void file_truncate(struct File *file, u_int new_size) {
   // 如果新的尺寸全部在直接指针区域
   if (new_nblock_num <= NDIRECT) {
     // 将多余部分清空
-    for (int file_block_no = new_nblock_num; block_no < old_nblock_num; block_no++) {
+    for (int file_block_no = new_nblock_num; file_block_no < old_nblock_num; file_block_no++) {
       panic_on(file_clear_block(file, file_block_no));
     }
     // 直接清空间接指针磁盘块
