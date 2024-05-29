@@ -69,7 +69,7 @@ int file_close(struct Fd *fd) {
 
   int func_info, i;
 
-  // Tell the file server the dirty page.
+  // 将文件的每一页标记为脏
   for (i = 0; i < file_size; i += PTMAP) {
     if ((func_info = fsipc_dirty(file_id, i)) < 0) {
       debugf("cannot mark pages as dirty\n");
@@ -77,13 +77,13 @@ int file_close(struct Fd *fd) {
     }
   }
 
-  // Request the file server to close the file with fsipc.
+  // 关闭文件
   if ((func_info = fsipc_close(file_id)) < 0) {
     debugf("cannot close the file\n");
     return func_info;
   }
 
-  // Unmap the content of file, release memory.
+  // 取消文件缓存在内存中的映射
   if (file_size == 0) {
     return 0;
   }

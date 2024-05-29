@@ -293,17 +293,17 @@ void serve_set_size(u_int envid, struct Fsreq_set_size *rq) {
  *  if Success, use ipc_send to return 0 to the caller.Otherwise,
  *  return the error value to the caller.
  */
-void serve_close(u_int envid, struct Fsreq_close *rq) {
-  struct Open *pOpen;
+// 关闭文件
+void serve_close(u_int envid, struct Fsreq_close *request) {
+  struct Open *open;
+  int func_info;
 
-  int r;
-
-  if ((r = open_lookup(envid, rq->req_fileid, &pOpen)) < 0) {
-    ipc_send(envid, r, 0, 0);
+  if ((func_info = open_lookup(envid, request->req_fileid, &open)) < 0) {
+    ipc_send(envid, func_info, 0, 0);
     return;
   }
-
-  file_close(pOpen->o_file);
+  // 关闭文件
+  file_close(open->o_file);
   ipc_send(envid, 0, 0, 0);
 }
 

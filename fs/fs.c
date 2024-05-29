@@ -258,23 +258,22 @@ int alloc_block(void) {
 //
 // Post-condition:
 //  If error occurred during read super block or validate failed, panic.
+// 读入超级块到磁盘，并检查正确性
 void read_super(void) {
-  int r;
-  void *blk;
+  void *block_va;
+  int func_info;
 
-  // Step 1: read super block.
-  if ((r = read_block(1, &blk, 0)) < 0) {
-    user_panic("cannot read superblock: %d", r);
+  // 将超级块读入内存，获得其地址
+  if ((func_info = read_block(1, &block_va, 0)) < 0) {
+    user_panic("cannot read superblock: %d", func_info);
   }
+  super = block_va;
 
-  super = blk;
-
-  // Step 2: Check fs magic nunber.
+  // 检查超级块的魔数
   if (super->s_magic != FS_MAGIC) {
     user_panic("bad file system magic number %x %x", super->s_magic, FS_MAGIC);
   }
-
-  // Step 3: validate disk size.
+  // 检查超级块大小
   if (super->s_nblocks > DISKMAX / BLOCK_SIZE) {
     user_panic("file system is too large");
   }
@@ -289,25 +288,24 @@ void read_super(void) {
 //  Read all the bitmap blocks into memory.
 //  Set the 'bitmap' to point to the first bitmap block.
 //  For each block i, user_assert(!block_is_free(i))) to check that they're all marked as in use.
+// 读入位图至内存并检查正确性
 void read_bitmap(void) {
-  u_int i;
-  void *blk = NULL;
+  void *block_va = NULL;
 
-  // Step 1: Calculate the number of the bitmap blocks, and read them into memory.
-  u_int nbitmap = super->s_nblocks / BLOCK_SIZE_BIT + 1;
-  for (i = 0; i < nbitmap; i++) {
-    read_block(i + 2, blk, 0);
+  // 计算位图所需的磁盘块数
+  u_int bitmap_block_num = super->s_nblocks / BLOCK_SIZE_BIT + 1;
+  for (int i = 0; i < bitmap_block_num; i++) {
+    read_block(bitmap_block_num + 2, &block_va, 0);
   }
-
+  // 设置位图的地址
   bitmap = disk_addr(2);
 
-  // Step 2: Make sure the reserved and root blocks are marked in-use.
-  // Hint: use `block_is_free`
+  // 检查跟和超级快的使用情况
   user_assert(!block_is_free(0));
   user_assert(!block_is_free(1));
 
-  // Step 3: Make sure all bitmap blocks are marked in-use.
-  for (i = 0; i < nbitmap; i++) {
+  // 确定位图所有所需块被载入内存
+  for (int i = 0; i < bitmap_block_num; i++) {
     user_assert(!block_is_free(i + 2));
   }
 
@@ -316,6 +314,7 @@ void read_bitmap(void) {
 
 // Overview:
 //  Test that write_block works, by smashing the superblock and reading it back.
+// 检查磁盘能否工作
 void check_write_block(void) {
   super = 0;
 
@@ -490,7 +489,7 @@ int file_clear_block(struct File *file, u_int file_block_no) {
 //
 // Post-Condition:
 //  return 0 on success, and read the data to `block_va_pointer`, return <0 on error.
-// 获取文件第block_no个磁盘块，保存到指针中，没有则创建
+// 获取文件第f_no个磁盘块，保存到指针中，没有则创建
 int file_get_block(struct File *file, u_int file_block_no, void **block_va_pointer) {
   int func_info;
   u_int disk_block_no;
@@ -792,7 +791,7 @@ int file_set_size(struct File *file, u_int new_size) {
   }
   // 多余情况直接设置
   file->f_size = new_size;
-
+  // 写回文件夹
   if (file->f_dir) {
     file_flush(file->f_dir);
   }
@@ -826,11 +825,13 @@ void file_flush(struct File *file) {
 
 // Overview:
 //  Sync the entire file system.  A big hammer.
+// 同步文件系统
 void fs_sync(void) {
-  int i;
-  for (i = 0; i < super->s_nblocks; i++) {
-    if (block_is_dirty(i)) {
-      write_block(i);
+  // 遍历文件系统所有磁盘块
+  for (int block_no = 0; block_no < super->s_nblocks; block_no++) {
+    // 如果有修改，则写回至磁盘
+    if (block_is_dirty(block_no)) {
+      write_block(block_no);
     }
   }
 }
