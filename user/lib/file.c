@@ -101,140 +101,141 @@ int file_close(struct Fd *fd) {
 //  Read 'n' bytes from 'fd' at the current seek position into 'buf'. Since files
 //  are memory-mapped, this amounts to a memcpy() surrounded by a little red
 //  tape to handle the file size and seek pointer.
-static int file_read(struct Fd *fd, void *buf, u_int n, u_int offset) {
-  u_int size;
-  struct Filefd *f;
-  f = (struct Filefd *)fd;
+// 从文件的offest处读取n个字节到buffer，返回实际读取的字节
+static int file_read(struct Fd *fd, void *buffer, u_int n, u_int offset) {
+  struct Filefd *file_fd = (struct Filefd *)fd;
+  u_int file_size = file_fd->f_file.f_size;
 
-  // Avoid reading past the end of file.
-  size = f->f_file.f_size;
-
-  if (offset > size) {
+  if (offset > file_size) {
     return 0;
   }
-
-  if (offset + n > size) {
-    n = size - offset;
+  // 多余则不读
+  if (offset + n > file_size) {
+    n = file_size - offset;
   }
-
-  memcpy(buf, (char *)fd2data(fd) + offset, n);
+  // 拷贝对应的地址
+  memcpy(buffer, (char *)fd2data(fd) + offset, n);
   return n;
 }
 
 // Overview:
 //  Find the virtual address of the page that maps the file block
 //  starting at 'offset'.
-int read_map(int fdnum, u_int offset, void **blk) {
-  int r;
-  void *va;
+// 获取fd_no对应文件的offest处的地址
+int read_map(int fd_no, u_int offset, void **va_pointer) {
   struct Fd *fd;
+  void *va;
+  int func_info;
 
-  if ((r = fd_lookup(fdnum, &fd)) < 0) {
-    return r;
+  // 获取对应的文件描述符
+  if ((func_info = fd_lookup(fd_no, &fd)) < 0) {
+    return func_info;
   }
-
+  // 检查设备是否正确
   if (fd->fd_dev_id != devfile.dev_id) {
     return -E_INVAL;
   }
-
-  va = fd2data(fd) + offset;
 
   if (offset >= MAXFILESIZE) {
     return -E_NO_DISK;
   }
 
+  // 获取地址
+  va = fd2data(fd) + offset;
+
+  // 检查文件是否被载入磁盘：检查页表
   if (!(vpd[PDX(va)] & PTE_V) || !(vpt[VPN(va)] & PTE_V)) {
     return -E_NO_DISK;
   }
 
-  *blk = (void *)va;
+  // 地址写入指针
+  *va_pointer = va;
   return 0;
 }
 
 // Overview:
 //  Write 'n' bytes from 'buf' to 'fd' at the current seek position.
-static int file_write(struct Fd *fd, const void *buf, u_int n, u_int offset) {
-  int r;
-  u_int tot;
-  struct Filefd *f;
+// 将buffer中n个字节写入到文件的offest处
+static int file_write(struct Fd *fd, const void *buffer, u_int n, u_int offset) {
+  struct Filefd *file_fd = (struct Filefd *)fd;
+  u_int final_place = offset + n;
+  int func_info;
 
-  f = (struct Filefd *)fd;
-
-  // Don't write more than the maximum file size.
-  tot = offset + n;
-
-  if (tot > MAXFILESIZE) {
+  // 最后终点比最大文件尺寸，报错
+  if (final_place > MAXFILESIZE) {
     return -E_NO_DISK;
   }
-  // Increase the file's size if necessary
-  if (tot > f->f_file.f_size) {
-    if ((r = ftruncate(fd2num(fd), tot)) < 0) {
-      return r;
+
+  // 比文件大，则扩容文件
+  if (final_place > file_fd->f_file.f_size) {
+    if ((func_info = ftruncate(fd2num(fd), final_place)) < 0) {
+      return func_info;
     }
   }
 
-  // Write the data
-  memcpy((char *)fd2data(fd) + offset, buf, n);
+  // 拷贝数据
+  memcpy((char *)fd2data(fd) + offset, final_place, n);
   return n;
 }
 
 static int file_stat(struct Fd *fd, struct Stat *st) {
-  struct Filefd *f;
+  struct Filefd *file_fd = (struct Filefd *)fd;
 
-  f = (struct Filefd *)fd;
+  strcpy(st->st_name, file_fd->f_file.f_name);
+  st->st_size = file_fd->f_file.f_size;
+  st->st_isdir = (file_fd->f_file.f_type == FTYPE_DIR);
 
-  strcpy(st->st_name, f->f_file.f_name);
-  st->st_size = f->f_file.f_size;
-  st->st_isdir = f->f_file.f_type == FTYPE_DIR;
   return 0;
 }
 
 // Overview:
 //  Truncate or extend an open file to 'size' bytes
-int ftruncate(int fdnum, u_int size) {
-  int i, r;
+// 将文件的大小设置为size
+int ftruncate(int fd_no, u_int new_size) {
   struct Fd *fd;
-  struct Filefd *f;
-  u_int oldsize, fileid;
+  int func_info, i;
 
-  if (size > MAXFILESIZE) {
+  if (new_size > MAXFILESIZE) {
     return -E_NO_DISK;
   }
 
-  if ((r = fd_lookup(fdnum, &fd)) < 0) {
-    return r;
+  // 获得第fd_no个文件描述符
+  if ((func_info = fd_lookup(fd_no, &fd)) < 0) {
+    return func_info;
   }
-
+  // 判断设备是否相同
   if (fd->fd_dev_id != devfile.dev_id) {
     return -E_INVAL;
   }
 
-  f = (struct Filefd *)fd;
-  fileid = f->f_fileid;
-  oldsize = f->f_file.f_size;
-  f->f_file.f_size = size;
-
-  if ((r = fsipc_set_size(fileid, size)) < 0) {
-    return r;
+  struct Filefd *file_fd = (struct Filefd *)fd;
+  u_int old_size = file_fd->f_file.f_size;
+  u_int file_id = file_fd->f_fileid;
+  // 设置大小
+  file_fd->f_file.f_size = new_size;
+  if ((func_info = fsipc_set_size(file_id, new_size)) < 0) {
+    return func_info;
   }
 
-  void *va = fd2data(fd);
+  // 获得文件在内存中的地址
+  void *file_va = fd2data(fd);
 
-  // Map any new pages needed if extending the file
-  for (i = ROUND(oldsize, PTMAP); i < ROUND(size, PTMAP); i += PTMAP) {
-    if ((r = fsipc_map(fileid, i, va + i)) < 0) {
-      int _r = fsipc_set_size(fileid, oldsize);
-      if (_r < 0) {
-        return _r;
+  // 如果大小变大，则载入新页面
+  for (i = ROUND(old_size, PTMAP); i < ROUND(new_size, PTMAP); i += PTMAP) {
+    // 将磁盘块加载进内存
+    if ((func_info = fsipc_map(file_id, i, file_va + i)) < 0) {
+      int func_info_2 = fsipc_set_size(file_id, old_size);
+      if (func_info_2 < 0) {
+        return func_info_2;
       }
-      return r;
+      return func_info;
     }
   }
 
-  // Unmap pages if truncating the file
-  for (i = ROUND(size, PTMAP); i < ROUND(oldsize, PTMAP); i += PTMAP) {
-    if ((r = syscall_mem_unmap(0, (void *)(va + i))) < 0) {
-      user_panic("ftruncate: syscall_mem_unmap %08x: %d\n", va + i, r);
+  // 如果大小变小，则取消映射
+  for (i = ROUND(new_size, PTMAP); i < ROUND(old_size, PTMAP); i += PTMAP) {
+    if ((func_info = syscall_mem_unmap(0, file_va + i)) < 0) {
+      user_panic("ftruncate: syscall_mem_unmap %08x: %d\n", file_va + i, func_info);
     }
   }
 
@@ -243,15 +244,14 @@ int ftruncate(int fdnum, u_int size) {
 
 // Overview:
 //  Delete a file or directory.
+// 按路径移除文件
 int remove(const char *path) {
-  // Call fsipc_remove.
-
-  /* Exercise 5.13: Your code here. */
   return fsipc_remove(path);
 }
 
 // Overview:
 //  Synchronize disk with buffer cache
+// 将文件系统的文件写回磁盘
 int sync(void) {
   return fsipc_sync();
 }

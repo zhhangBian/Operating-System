@@ -92,9 +92,8 @@ int fd_lookup(int fd_no, struct Fd **fd) {
   }
 
   u_int fd_va = INDEX2FD(fd_no);
-  // 判断fd是否在被使用
+  // 判断fd是否在被使用：通过页表判断
   int pte_no = fd_va / PTMAP;
-  // 通过页表判断
   if ((vpt[pte_no] & PTE_V) != 0) {
     *fd = (struct Fd *)fd_va;
     return 0;

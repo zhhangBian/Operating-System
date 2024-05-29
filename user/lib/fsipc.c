@@ -75,7 +75,7 @@ int fsipc_open(const char *path, u_int mode, struct Fd *fd) {
 // Returns:
 //  0 on success,
 //  < 0 on failure.
-// 将文件加载进内存，建立一个映射
+// 将磁盘块加载进内存，建立一个映射
 int fsipc_map(u_int file_id, u_int offset, void *dst_va) {
   int func_info;
   u_int permission;
