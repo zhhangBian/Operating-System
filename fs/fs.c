@@ -769,7 +769,7 @@ void file_truncate(struct File *file, u_int new_size) {
       free_block(file->f_indirect);
       file->f_indirect = 0;
     }
-  } 
+  }
   // 在间接指针区域
   else {
     for (int block_no = new_nblock_num; block_no < old_nblock_num; block_no++) {

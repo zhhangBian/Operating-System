@@ -19,6 +19,8 @@
  * o_ff: va of filefd page
  */
 // 记录打开文件的信息
+// 用户界面用fd，文件服务进程用Open
+// Open和fd是一一对应的，可以通过o_ff访问
 struct Open {
   // 指向打开文件的指针
   struct File *o_file;
@@ -42,6 +44,7 @@ struct Open {
  * Open file table, a per-environment array of open files
  */
 // 用于记录整个操作系统中所有处于打开状态的文件
+// 用户界面用fd，文件服务进程用Open
 struct Open opentab[MAXOPEN];
 
 /*
@@ -232,25 +235,27 @@ void serve_open(u_int envid, struct Fsreq_open *request) {
  *  if Success, use ipc_send to return zero and  the block to
  *  the caller.Otherwise, return the error value to the caller.
  */
-void serve_map(u_int envid, struct Fsreq_map *rq) {
-  struct Open *pOpen;
-  u_int filebno;
-  void *blk;
-  int r;
+// 将磁盘块载入内存
+void serve_map(u_int envid, struct Fsreq_map *request) {
+  struct Open *open;
+  int func_info;
 
-  if ((r = open_lookup(envid, rq->req_fileid, &pOpen)) < 0) {
-    ipc_send(envid, r, 0, 0);
+  // 获得对应的open块
+  if ((func_info = open_lookup(envid, request->req_fileid, &open)) < 0) {
+    ipc_send(envid, func_info, 0, 0);
     return;
   }
 
-  filebno = rq->req_offset / BLOCK_SIZE;
-
-  if ((r = file_get_block(pOpen->o_file, filebno, &blk)) < 0) {
-    ipc_send(envid, r, 0, 0);
+  // 获得磁盘块在文件中的编号f_no
+  u_int file_block_no = request->req_offset / BLOCK_SIZE;
+  // 获得磁盘块在磁盘中的编号b_no
+  void *block_no_pointer;
+  if ((func_info = file_get_block(open->o_file, file_block_no, &block_no_pointer)) < 0) {
+    ipc_send(envid, func_info, 0, 0);
     return;
   }
 
-  ipc_send(envid, 0, blk, PTE_D | PTE_LIBRARY);
+  ipc_send(envid, 0, block_no_pointer, PTE_D | PTE_LIBRARY);
 }
 
 /*
@@ -265,16 +270,20 @@ void serve_map(u_int envid, struct Fsreq_map *rq) {
  * if Success, use ipc_send to return 0 to the caller. Otherwise,
  * return the error value to the caller.
  */
-void serve_set_size(u_int envid, struct Fsreq_set_size *rq) {
-  struct Open *pOpen;
-  int r;
-  if ((r = open_lookup(envid, rq->req_fileid, &pOpen)) < 0) {
-    ipc_send(envid, r, 0, 0);
+// 设置文件的尺寸
+void serve_set_size(u_int envid, struct Fsreq_set_size *request) {
+  struct Open *open;
+  int func_info;
+
+  // 获取open块
+  if ((func_info = open_lookup(envid, request->req_fileid, &open)) < 0) {
+    ipc_send(envid, func_info, 0, 0);
     return;
   }
 
-  if ((r = file_set_size(pOpen->o_file, rq->req_size)) < 0) {
-    ipc_send(envid, r, 0, 0);
+  // 设置文件的尺寸
+  if ((func_info = file_set_size(open->o_file, request->req_size)) < 0) {
+    ipc_send(envid, func_info, 0, 0);
     return;
   }
 
@@ -362,6 +371,7 @@ void serve_dirty(u_int envid, struct Fsreq_dirty *request) {
  *  and then use the `ipc_send` and `return` 0 to tell the caller
  *  file system is synced.
  */
+// 将文件系统的文件更新回磁盘
 void serve_sync(u_int envid) {
   fs_sync();
   ipc_send(envid, 0, 0, 0);
@@ -374,12 +384,19 @@ void serve_sync(u_int envid) {
  */
 // 文件服务需求函数
 void *serve_table[MAX_FSREQNO] = {
+  // 文件服务进程的打开文件操作
   [FSREQ_OPEN]      = serve_open,
+  // 将磁盘块载入内存
   [FSREQ_MAP]       = serve_map,
+  // 设置文件的尺寸
   [FSREQ_SET_SIZE]  = serve_set_size,
+  // 关闭文件
   [FSREQ_CLOSE]     = serve_close,
+  // 将文件控制块标记为脏
   [FSREQ_DIRTY]     = serve_dirty,
+  // 移除path处的文件，返回值为移除函数的返回值
   [FSREQ_REMOVE]    = serve_remove,
+  // 将文件系统的文件更新回磁盘
   [FSREQ_SYNC]      = serve_sync,
 };
 

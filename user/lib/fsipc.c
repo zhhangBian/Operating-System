@@ -150,6 +150,7 @@ int fsipc_remove(const char *path) {
 // Overview:
 //  Ask the file server to update the disk by writing any dirty
 //  blocks in the buffer cache.
+// 将文件系统的内容写回磁盘
 int fsipc_sync(void) {
   return fsipc(FSREQ_SYNC, fsipcbuf, 0, 0);
 }
