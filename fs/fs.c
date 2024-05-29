@@ -290,12 +290,10 @@ void read_super(void) {
 //  For each block i, user_assert(!block_is_free(i))) to check that they're all marked as in use.
 // 读入位图至内存并检查正确性
 void read_bitmap(void) {
-  void *block_va = NULL;
-
   // 计算位图所需的磁盘块数
   u_int bitmap_block_num = super->s_nblocks / BLOCK_SIZE_BIT + 1;
   for (int i = 0; i < bitmap_block_num; i++) {
-    read_block(bitmap_block_num + 2, &block_va, 0);
+    read_block(bitmap_block_num + 2, NULL, 0);
   }
   // 设置位图的地址
   bitmap = disk_addr(2);
