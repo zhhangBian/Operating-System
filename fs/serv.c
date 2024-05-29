@@ -390,18 +390,24 @@ void serve_chmod(u_int envid, struct Fsreq_chmod *rq) {
 		ipc_send(envid, r, 0, 0);
 		return;
 	}
+	debugf("%d---\n",file->f_mode);
 
 	int type = rq->req_type;
-	int mode = rq->req_mode;
+	uint32_t mode = rq->req_mode;
+	debugf("%d %d %d %s\n", type,file->f_mode, mode, rq->req_path);
+
 	if(type == 0) {
 		file->f_mode = mode;
 	}
 	else if(type == 1) {
-		file->f_mode |= mode;
+		file->f_mode = file->f_mode | mode;
 	}
 	else if(type == 2) {
-		file->f_mode &= (~mode);
+		file->f_mode = file->f_mode & (~mode);
 	}
+
+	debugf("%d %d\n",file->f_mode, ~mode);
+	file_close(file);
 
 	ipc_send(envid, 0, 0, 0);
 }

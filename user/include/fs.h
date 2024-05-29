@@ -9,7 +9,7 @@
 #define FMODE_RW 0x6
 #define FMODE_ALL 0x7
 
-#define STMODE2FMODE(st_mode) (((st_mode) >> 6) & FMODE_ALL)
+#define STMODE2FMODE(st_mode) (((st_mode)>>6) & FMODE_ALL)
 
 // File nodes (both in-memory and on-disk)
 

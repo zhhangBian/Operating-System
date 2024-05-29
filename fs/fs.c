@@ -741,8 +741,8 @@ int file_create(char *path, struct File **file_pointer) {
   }
   // 为文件控制块拷贝名字
   strcpy(file->f_name, name);
-	file->f_mode = FMODE_ALL;	
-
+	file->f_mode = 7;	
+	file_flush(file);
   *file_pointer = file;
   return 0;
 }
