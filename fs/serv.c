@@ -377,6 +377,16 @@ void serve_sync(u_int envid) {
   ipc_send(envid, 0, 0, 0);
 }
 
+void serve_copy(u_int envid, struct Fsreq_copy *rq){
+   // Lab 5-2-Exam: Your code here. (6/6)
+
+	int	r = directory_copy(rq->req_src_path, rq->req_dst_path);
+	if(r<0) {
+		ipc_send(envid, r, 0, 0);
+		return;
+	}
+}
+
 /*
  * The serve function table
  * File system use this table and the request number to
@@ -398,6 +408,8 @@ void *serve_table[MAX_FSREQNO] = {
   [FSREQ_REMOVE]    = serve_remove,
   // 将文件系统的文件更新回磁盘
   [FSREQ_SYNC]      = serve_sync,
+	[FSREQ_COPY] = serve_copy,
+
 };
 
 /*

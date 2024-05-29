@@ -20,7 +20,13 @@ enum {
 	FSREQ_REMOVE,
   // 同步文件，向磁盘写回被修改过的文件
 	FSREQ_SYNC,
+	FSREQ_COPY,
 	MAX_FSREQNO,
+};
+
+struct Fsreq_copy {
+   char req_src_path[MAXPATHLEN];
+   char req_dst_path[MAXPATHLEN];
 };
 
 // open操作的文件ipc请求
