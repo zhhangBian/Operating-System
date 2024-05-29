@@ -27,7 +27,7 @@ struct Dev devfile = {
 // Returns:
 //  the file descriptor on success,
 //  the underlying error on failure.
-// 按照mode模式打开path的文件，返回文件描述符
+// 按照mode模式打开path的文件，返回文件描述符的id
 int open(const char *file_path, int mode) {
   // 获取一个新的文件描述符
   struct Fd *fd;
@@ -57,44 +57,43 @@ int open(const char *file_path, int mode) {
 
 // Overview:
 //  Close a file descriptor
+// 关闭文件描述符对应的文件
 int file_close(struct Fd *fd) {
-  int r;
-  struct Filefd *ffd;
-  void *va;
-  u_int size, fileid;
-  u_int i;
+  struct Filefd *file_fd = (struct Filefd *)fd;
+  // 获取文件在内存中的虚拟地址
+  void *file_va = fd2data(fd);
+  // 获取文件对应的文件描述符id
+  u_int file_id = file_fd->f_fileid;
+  // 获取文件大小
+  u_int file_size = file_fd->f_file.f_size;
 
-  ffd = (struct Filefd *)fd;
-  fileid = ffd->f_fileid;
-  size = ffd->f_file.f_size;
-
-  // Set the start address storing the file's content.
-  va = fd2data(fd);
+  int func_info, i;
 
   // Tell the file server the dirty page.
-  for (i = 0; i < size; i += PTMAP) {
-    if ((r = fsipc_dirty(fileid, i)) < 0) {
+  for (i = 0; i < file_size; i += PTMAP) {
+    if ((func_info = fsipc_dirty(file_id, i)) < 0) {
       debugf("cannot mark pages as dirty\n");
-      return r;
+      return func_info;
     }
   }
 
   // Request the file server to close the file with fsipc.
-  if ((r = fsipc_close(fileid)) < 0) {
+  if ((func_info = fsipc_close(file_id)) < 0) {
     debugf("cannot close the file\n");
-    return r;
+    return func_info;
   }
 
   // Unmap the content of file, release memory.
-  if (size == 0) {
+  if (file_size == 0) {
     return 0;
   }
-  for (i = 0; i < size; i += PTMAP) {
-    if ((r = syscall_mem_unmap(0, (void *)(va + i))) < 0) {
+  for (i = 0; i < file_size; i += PTMAP) {
+    if ((func_info = syscall_mem_unmap(0, (void *)(file_va + i))) < 0) {
       debugf("cannont unmap the file\n");
-      return r;
+      return func_info;
     }
   }
+
   return 0;
 }
 

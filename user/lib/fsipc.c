@@ -7,6 +7,8 @@
 // fsipc.c：实现与文件系统服务进程的交互
 // 文件系统的大部分操作并不在内核态中完成，而是交由一个文件系统服务进程处理
 
+// 具体的实现见 fs/serv.c
+
 // 缓冲区：数组实际上是申请了空间
 // 缓冲区大小为一个页面，还进行了对齐
 u_char fsipcbuf[PAGE_SIZE] __attribute__((aligned(PAGE_SIZE)));
@@ -117,6 +119,7 @@ int fsipc_close(u_int file_id) {
 
 // Overview:
 //  Ask the file server to mark a particular file block dirty.
+// 将文件块offest处的磁盘块标记为脏
 int fsipc_dirty(u_int file_id, u_int offset) {
   struct Fsreq_dirty *request = (struct Fsreq_dirty *)fsipcbuf;
   request->req_fileid = file_id;

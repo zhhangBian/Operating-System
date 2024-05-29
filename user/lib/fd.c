@@ -191,11 +191,10 @@ int dup(int old_fd_no, int new_fd_no) {
       // 如果页表有效
       if (pte & PTE_V) {
         // 复制页表内容建立映射
-        if ((func_info =
-              syscall_mem_map(
-                0, (void *)(old_file_va + i),
-                0, (void *)(new_file_va + i),
-                pte & (PTE_D | PTE_LIBRARY)
+        if ((func_info = syscall_mem_map(
+              0, (void *)(old_file_va + i),
+              0, (void *)(new_file_va + i),
+              pte & (PTE_D | PTE_LIBRARY)
           )) < 0) {
           goto err;
         }
@@ -311,15 +310,17 @@ int write(int fd_no, const void *buffer, u_int n) {
   return func_info;
 }
 
-int seek(int fdnum, u_int offset) {
-  int r;
+// 找到fd_no文件对应offest处
+int seek(int fd_no, u_int offset) {
   struct Fd *fd;
+  int func_info;
 
-  if ((r = fd_lookup(fdnum, &fd)) < 0) {
-    return r;
+  if ((func_info = fd_lookup(fd_no, &fd)) < 0) {
+    return func_info;
   }
 
   fd->fd_offset = offset;
+
   return 0;
 }
 

@@ -260,7 +260,7 @@ struct File *create_file(struct File *dictionary_file) {
 // 将文件写入磁盘
 void write_file(struct File *dictionary_file, const char *path) {
   int iblk = 0, r = 0, n = sizeof(disk[0].data);
-  // 在目录下创建文件按
+  // 在目录下创建一个文件控制块，已经初始化
   struct File *target = create_file(dictionary_file);
 
   /* in case `create_file` is't filled */
@@ -357,13 +357,18 @@ int main(int argc, char **argv) {
     struct stat stat_buf;
     int r = stat(name, &stat_buf);
     assert(r == 0);
+    // 将文件夹烧录到磁盘镜像
     if (S_ISDIR(stat_buf.st_mode)) {
       printf("writing directory '%s' recursively into disk\n", name);
       write_directory(&super.s_root, name);
-    } else if (S_ISREG(stat_buf.st_mode)) {
+    } 
+    // 将常规文件烧录到磁盘镜像
+    else if (S_ISREG(stat_buf.st_mode)) {
       printf("writing regular file '%s' into disk\n", name);
       write_file(&super.s_root, name);
-    } else {
+    } 
+    // 其他情况，视作异常
+    else {
       fprintf(stderr, "'%s' has illegal file mode %o\n", name, stat_buf.st_mode);
       exit(2);
     }

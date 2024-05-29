@@ -458,9 +458,9 @@ int sys_cgetc(void) {
 }
 
 #define CONSOLE_BEGIN (0x180003f8)
-#define CONSOLE_END (0x180003f8 + 0x20)
-#define IDE_BEGIN (0x180001f0)
-#define IDE_END (0x180001f0 + 0x8)
+#define CONSOLE_END   (0x180003f8 + 0x20)
+#define IDE_BEGIN     (0x180001f0)
+#define IDE_END       (0x180001f0 + 0x8)
 
 /* Overview:
  *  This function is used to write data at 'va' with length 'len' to a device physical address

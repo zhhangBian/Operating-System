@@ -318,15 +318,10 @@ void serve_close(u_int envid, struct Fsreq_close *rq) {
  * Return:
  *  the result of the file_remove to the caller by ipc_send.
  */
-void serve_remove(u_int envid, struct Fsreq_remove *rq) {
-  // Step 1: Remove the file specified in 'rq' using 'file_remove' and store its return value.
-  int r;
-  /* Exercise 5.11: Your code here. (1/2) */
-  r = file_remove(rq->req_path);
-
-  // Step 2: Respond the return value to the caller 'envid' using 'ipc_send'.
-  /* Exercise 5.11: Your code here. (2/2) */
-  ipc_send(envid, r, 0, 0);
+// 移除path处的文件，返回值为移除函数的返回值
+void serve_remove(u_int envid, struct Fsreq_remove *request) {
+  int func_info = file_remove(request->req_path);
+  ipc_send(envid, func_info, 0, 0);
 }
 
 /*
@@ -341,17 +336,19 @@ void serve_remove(u_int envid, struct Fsreq_remove *rq) {
  *  if Success, use ipc_send to return 0 to the caller. Otherwise,
  *  return the error value to the caller.
  */
-void serve_dirty(u_int envid, struct Fsreq_dirty *rq) {
-  struct Open *pOpen;
-  int r;
+// 将文件控制块标记为脏
+void serve_dirty(u_int envid, struct Fsreq_dirty *request) {
+  struct Open *open;
+  int func_info;
 
-  if ((r = open_lookup(envid, rq->req_fileid, &pOpen)) < 0) {
-    ipc_send(envid, r, 0, 0);
+  // 获取文件id对应的open块
+  if ((func_info = open_lookup(envid, request->req_fileid, &open)) < 0) {
+    ipc_send(envid, func_info, 0, 0);
     return;
   }
-
-  if ((r = file_dirty(pOpen->o_file, rq->req_offset)) < 0) {
-    ipc_send(envid, r, 0, 0);
+  // 将文件控制块标记为脏
+  if ((func_info = file_dirty(open->o_file, request->req_offset)) < 0) {
+    ipc_send(envid, func_info, 0, 0);
     return;
   }
 

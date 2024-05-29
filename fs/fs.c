@@ -193,7 +193,7 @@ int block_is_free(u_int block_no) {
 
 // Overview:
 //  Mark a block as free in the bitmap.
-// 通过位图设置一个磁盘块为空闲
+// 通过位图设置第no个磁盘块为空闲
 void free_block(u_int block_no) {
   // 判断磁盘块号是否合法
   if (super == 0 || block_no >= super->s_nblocks) {
@@ -464,17 +464,20 @@ int file_map_block(struct File *file, u_int file_block_no, u_int *disk_block_no,
 
 // Overview:
 //  Remove a block from file f. If it's not there, just silently succeed.
-int file_clear_block(struct File *f, u_int file_block_no) {
-  int r;
-  uint32_t *ptr;
+// 将文件的第f_no个磁盘控制块从文件控制块文件中移除
+int file_clear_block(struct File *file, u_int file_block_no) {
+  uint32_t *block_no_pointer;
+  int func_info;
 
-  if ((r = file_block_walk(f, file_block_no, &ptr, 0)) < 0) {
-    return r;
+  // 获取文件的第f_no个磁盘控制块，保存到指针中
+  if ((func_info = file_block_walk(file, file_block_no, &block_no_pointer, 0)) < 0) {
+    return func_info;
   }
 
-  if (*ptr) {
-    free_block(*ptr);
-    *ptr = 0;
+  // 磁盘块有效
+  if (*block_no_pointer) {
+    free_block(*block_no_pointer);
+    *block_no_pointer = 0;
   }
 
   return 0;
@@ -508,15 +511,19 @@ int file_get_block(struct File *file, u_int file_block_no, void **block_va_point
 
 // Overview:
 //  Mark the offset/BLOCK_SIZE'th block dirty in file f.
-int file_dirty(struct File *f, u_int offset) {
-  int r;
-  u_int diskblock_no;
+// 将文件控制块标记为脏
+int file_dirty(struct File *file, u_int offset) {
+  // 获取offest对应的磁盘块号（相对文件）
+  u_int file_block_no = offset / BLOCK_SIZE;
+  u_int disk_block_no;
+  int func_info;
 
-  if ((r = file_map_block(f, offset / BLOCK_SIZE, &diskblock_no, 0)) < 0) {
-    return r;
+  // 获取文件中的第f_no个磁盘块的磁盘块号
+  if ((func_info = file_map_block(file, file_block_no, &disk_block_no, 0)) < 0) {
+    return func_info;
   }
-
-  return dirty_block(diskblock_no);
+  // 将磁盘控制块标记为脏
+  return dirty_block(disk_block_no);
 }
 
 // Overview:
@@ -743,44 +750,51 @@ int file_create(char *path, struct File **file_pointer) {
 //  (Remember to clear the f->f_indirect pointer so you'll know whether it's valid!)
 //
 // Hint: use file_clear_block.
-// 缩小文件尺寸
-void file_truncate(struct File *f, u_int newsize) {
-  u_int block_no, old_nblocks, new_nblocks;
-
-  old_nblocks = ROUND(f->f_size, BLOCK_SIZE) / BLOCK_SIZE;
-  new_nblocks = ROUND(newsize, BLOCK_SIZE) / BLOCK_SIZE;
-
-  if (newsize == 0) {
-    new_nblocks = 0;
+// 缩小文件尺寸至new_size
+void file_truncate(struct File *file, u_int new_size) {
+  // 获取size占用的磁盘块数
+  u_int old_nblock_num = ROUND(file->f_size, BLOCK_SIZE) / BLOCK_SIZE;
+  u_int new_nblock_num = ROUND(new_size, BLOCK_SIZE) / BLOCK_SIZE;
+  if (new_size == 0) {
+    new_nblock_num = 0;
   }
 
-  if (new_nblocks <= NDIRECT) {
-    for (block_no = new_nblocks; block_no < old_nblocks; block_no++) {
-      panic_on(file_clear_block(f, block_no));
+  // 如果新的尺寸全部在直接指针区域
+  if (new_nblock_num <= NDIRECT) {
+    // 将多余部分清空
+    for (int block_no = new_nblock_num; block_no < old_nblock_num; block_no++) {
+      panic_on(file_clear_block(file, block_no));
     }
-    if (f->f_indirect) {
-      free_block(f->f_indirect);
-      f->f_indirect = 0;
+    // 直接清空间接指针磁盘块
+    if (file->f_indirect) {
+      free_block(file->f_indirect);
+      file->f_indirect = 0;
     }
-  } else {
-    for (block_no = new_nblocks; block_no < old_nblocks; block_no++) {
-      panic_on(file_clear_block(f, block_no));
+  } 
+  // 在间接指针区域
+  else {
+    for (int block_no = new_nblock_num; block_no < old_nblock_num; block_no++) {
+      // 将对应磁盘块清空
+      panic_on(file_clear_block(file, block_no));
     }
   }
-  f->f_size = newsize;
+  // 设置新大小
+  file->f_size = new_size;
 }
 
 // Overview:
 //  Set file size to newsize.
-int file_set_size(struct File *f, u_int newsize) {
-  if (f->f_size > newsize) {
-    file_truncate(f, newsize);
+// 将文件设置为新大小，判断了
+int file_set_size(struct File *file, u_int new_size) {
+  // 如果是缩小尺寸，清空不用的磁盘块
+  if (file->f_size > new_size) {
+    file_truncate(file, new_size);
   }
+  // 多余情况直接设置
+  file->f_size = new_size;
 
-  f->f_size = newsize;
-
-  if (f->f_dir) {
-    file_flush(f->f_dir);
+  if (file->f_dir) {
+    file_flush(file->f_dir);
   }
 
   return 0;
@@ -791,22 +805,21 @@ int file_set_size(struct File *f, u_int newsize) {
 //  Loop over all the blocks in file.
 //  Translate the file block number into a disk block number and then
 //  check whether that disk block is dirty. If so, write it out.
-//
-// Hint: use file_map_block, block_is_dirty, and write_block.
-void file_flush(struct File *f) {
-  u_int nblocks;
-  u_int block_no;
-  u_int diskno;
-  int r;
+// 将文件的内容脏部分写回磁盘
+void file_flush(struct File *file) {
+  // 获取文件占有的磁盘块数
+  u_int block_num = ROUND(file->f_size, BLOCK_SIZE) / BLOCK_SIZE;
+  u_int disk_no;
 
-  nblocks = ROUND(f->f_size, BLOCK_SIZE) / BLOCK_SIZE;
-
-  for (block_no = 0; block_no < nblocks; block_no++) {
-    if ((r = file_map_block(f, block_no, &diskno, 0)) < 0) {
+  // 遍历文件的磁盘块
+  for (int block_no = 0; block_no < block_num; block_no++) {
+    // 获取文件的磁盘块对应的磁盘块号
+    if (file_map_block(file, block_no, &disk_no, 0)) {
       continue;
     }
-    if (block_is_dirty(diskno)) {
-      write_block(diskno);
+    // 如果文件是脏的，则写回到磁盘
+    if (block_is_dirty(disk_no)) {
+      write_block(disk_no);
     }
   }
 }
@@ -824,35 +837,38 @@ void fs_sync(void) {
 
 // Overview:
 //  Close a file.
-void file_close(struct File *f) {
-  // Flush the file itself, if f's f_dir is set, flush it's f_dir.
-  file_flush(f);
-  if (f->f_dir) {
-    file_flush(f->f_dir);
+// 关闭文件
+void file_close(struct File *file) {
+  // 写回文件至磁盘
+  file_flush(file);
+  // 把目录写回磁盘
+  if (file->f_dir) {
+    file_flush(file->f_dir);
   }
 }
 
 // Overview:
 //  Remove a file by truncating it and then zeroing the name.
+// 通过路径移除文件
 int file_remove(char *path) {
-  int r;
-  struct File *f;
+  struct File *file;
+  int func_info;
 
-  // Step 1: find the file on the disk.
-  if ((r = walk_path(path, 0, &f, 0)) < 0) {
-    return r;
+  // 通过路径获得文件，保存到指针
+  if ((func_info = walk_path(path, 0, &file, 0)) < 0) {
+    return func_info;
   }
 
-  // Step 2: truncate it's size to zero.
-  file_truncate(f, 0);
-
-  // Step 3: clear it's name.
-  f->f_name[0] = '\0';
-
-  // Step 4: flush the file.
-  file_flush(f);
-  if (f->f_dir) {
-    file_flush(f->f_dir);
+  // 清楚文件控制块的信息
+  // 将文件的大小设置为0
+  file_truncate(file, 0);
+  // 将文件名清空
+  file->f_name[0] = '\0';
+  // 将文件有修改的部分写回到磁盘
+  file_flush(file);
+  // 文件有目录，去除目录信息
+  if (file->f_dir) {
+    file_flush(file->f_dir);
   }
 
   return 0;
