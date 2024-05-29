@@ -3,6 +3,14 @@
 
 #include <stdint.h>
 
+#define FMODE_R 0x4
+#define FMODE_W 0x2
+#define FMODE_X 0x1
+#define FMODE_RW 0x6
+#define FMODE_ALL 0x7
+
+#define STMODE2FMODE(st_mode) (((st_mode) >> 6) & FMODE_ALL)
+
 // File nodes (both in-memory and on-disk)
 
 // Bytes per file system block - same as page size
@@ -45,8 +53,10 @@ struct File {
   uint32_t f_indirect;
   // 指向文件所属的文件目录
   struct File *f_dir;
+ 
+  uint32_t f_mode;
   // 让文件控制块和PAGE_SIZE对齐的填充部分
-  char f_pad[FILE_STRUCT_SIZE - MAXNAMELEN - (3 + NDIRECT) * 4 - sizeof(void *)];
+  char f_pad[FILE_STRUCT_SIZE - MAXNAMELEN - (4 + NDIRECT) * 4 - sizeof(void *)];
 } __attribute__((aligned(4), packed));
 
 // 一个磁盘块拥有的文件控制块数目

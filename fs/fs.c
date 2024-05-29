@@ -537,6 +537,10 @@ int dir_lookup(struct File *dictionary, char *name, struct File **file_pointer) 
   u_int block_num = dictionary->f_size / PAGE_SIZE;
   void *block;
 
+  if(dictionary->f_mode & FMODE_X ==0) {
+	  return -E_PERM_DENY;
+  }
+
   // 遍历目录占据的磁盘块，寻找文件控制块
   for (int i = 0; i < block_num; i++) {
     // 获取文件第i个磁盘块，保存到block指针中
@@ -726,12 +730,18 @@ int file_create(char *path, struct File **file_pointer) {
   if (func_info != -E_NOT_FOUND || dictionary == 0) {
     return func_info;
   }
+
+  if(dictionary->f_mode & FMODE_W ==0) {
+	  return -E_PERM_DENY;
+  }
+
   // 在目录下创建文件，获得文件控制块
   if (dir_alloc_file(dictionary, &file) < 0) {
     return func_info;
   }
   // 为文件控制块拷贝名字
   strcpy(file->f_name, name);
+	file->f_mode = FMODE_ALL;	
 
   *file_pointer = file;
   return 0;
@@ -859,6 +869,10 @@ int file_remove(char *path) {
   if ((func_info = walk_path(path, 0, &file, 0)) < 0) {
     return func_info;
   }
+
+	if(file->f_dir->f_mode & FMODE_W ==0) {
+		return -E_PERM_DENY;
+	}
 
   // 清楚文件控制块的信息
   // 将文件的大小设置为0

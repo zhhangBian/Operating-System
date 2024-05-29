@@ -184,6 +184,7 @@ void serve_open(u_int envid, struct Fsreq_open *request) {
     return;
   }
 
+
   // 如果文件请求是 不存在则创建 访问文件模式
   if (request->req_omode & O_CREAT) {
     // 创建文件
@@ -200,6 +201,11 @@ void serve_open(u_int envid, struct Fsreq_open *request) {
     ipc_send(envid, func_info, 0, 0);
     return;
   }
+
+	if(request->req_omode & file->f_mode == 0) {
+		ipc_send(envid, -E_PERM_DENY, 0, 0);
+		return;
+	}
 
   // 如果是  缩减到0长度  模式
   if (request->req_omode & O_TRUNC) {
@@ -377,6 +383,29 @@ void serve_sync(u_int envid) {
   ipc_send(envid, 0, 0, 0);
 }
 
+void serve_chmod(u_int envid, struct Fsreq_chmod *rq) {
+	struct File* file;
+	int r = file_open(rq->req_path, &file);
+	if(r<0) {
+		ipc_send(envid, r, 0, 0);
+		return;
+	}
+
+	int type = rq->req_type;
+	int mode = rq->req_mode;
+	if(type == 0) {
+		file->f_mode = mode;
+	}
+	else if(type == 1) {
+		file->f_mode |= mode;
+	}
+	else if(type == 2) {
+		file->f_mode &= (~mode);
+	}
+
+	ipc_send(envid, 0, 0, 0);
+}
+
 /*
  * The serve function table
  * File system use this table and the request number to
@@ -398,6 +427,8 @@ void *serve_table[MAX_FSREQNO] = {
   [FSREQ_REMOVE]    = serve_remove,
   // 将文件系统的文件更新回磁盘
   [FSREQ_SYNC]      = serve_sync,
+	[FSREQ_CHMOD] = serve_chmod,
+
 };
 
 /*

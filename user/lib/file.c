@@ -184,6 +184,7 @@ static int file_stat(struct Fd *fd, struct Stat *st) {
   strcpy(st->st_name, file_fd->f_file.f_name);
   st->st_size = file_fd->f_file.f_size;
   st->st_isdir = (file_fd->f_file.f_type == FTYPE_DIR);
+	st->st_mode = file_fd->f_file.f_mode;
 
   return 0;
 }
@@ -254,4 +255,8 @@ int remove(const char *path) {
 // 将文件系统的文件写回磁盘
 int sync(void) {
   return fsipc_sync();
+}
+
+int chmod(const char *path, u_int mode, int type) {
+	return fsipc_chmod(path, mode, type);
 }

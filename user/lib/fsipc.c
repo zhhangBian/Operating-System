@@ -154,3 +154,16 @@ int fsipc_remove(const char *path) {
 int fsipc_sync(void) {
   return fsipc(FSREQ_SYNC, fsipcbuf, 0, 0);
 }
+
+int fsipc_chmod(const char *path, u_int mode, int type) {
+	if (strlen(path) >= MAXPATHLEN) {
+		return -E_BAD_PATH;
+	}
+
+	struct Fsreq_chmod *request = (struct Fsreq_chmod*) fsipcbuf;
+	strcpy(request->req_path, path);
+	request->req_mode = mode;
+	request->req_type = type;
+
+	fsipc(FSREQ_CHMOD, request, 0, 0);
+}

@@ -20,6 +20,7 @@ enum {
 	FSREQ_REMOVE,
   // 同步文件，向磁盘写回被修改过的文件
 	FSREQ_SYNC,
+	FSREQ_CHMOD,
 	MAX_FSREQNO,
 };
 
@@ -56,6 +57,12 @@ struct Fsreq_dirty {
 // remove操作的文件ipc请求
 struct Fsreq_remove {
 	char req_path[MAXPATHLEN];
+};
+
+struct Fsreq_chmod {
+    char req_path[MAXPATHLEN];
+    u_int req_mode;
+    int req_type;
 };
 
 #endif
