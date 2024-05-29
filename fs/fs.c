@@ -863,7 +863,7 @@ int file_remove(char *path) {
   // 清楚文件控制块的信息
   // 将文件的大小设置为0
   file_truncate(file, 0);
-  // 将文件名清空
+  // 将文件名清空，不移除，只删名字，后续遇到约定俗成
   file->f_name[0] = '\0';
   // 将文件有修改的部分写回到磁盘
   file_flush(file);
