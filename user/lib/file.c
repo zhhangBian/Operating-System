@@ -174,7 +174,7 @@ static int file_write(struct Fd *fd, const void *buffer, u_int n, u_int offset) 
   }
 
   // 拷贝数据
-  memcpy((char *)fd2data(fd) + offset, final_place, n);
+  memcpy((char *)fd2data(fd) + offset, buffer, n);
   return n;
 }
 
