@@ -35,8 +35,7 @@ int main() {
 	}
 
 	stat("/newmotd", &stat_buf);
-	_die_if_not(stat_buf.st_mode == FMODE_R, "Wrong mode, expect %d but got %d", FMODE_R,
-		    stat_buf.st_mode);
+	_die_if_not(stat_buf.st_mode == FMODE_R, "Wrong mode, expect %d but got %d\n", FMODE_R, stat_buf.st_mode);
 
 	if ((r = open("/newmotd", O_WRONLY)) >= 0) {
 		_die("Bad, can still open /newmotd with O_WRONLY: %d\n", r);

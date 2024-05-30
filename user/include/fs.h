@@ -52,9 +52,10 @@ struct File {
   // 在文件大小超过40KB时使用，共1024个指针，但不使用前10个指针
   uint32_t f_indirect;
   // 指向文件所属的文件目录
-  struct File *f_dir;
- 
   uint32_t f_mode;
+  
+  struct File *f_dir;
+  
   // 让文件控制块和PAGE_SIZE对齐的填充部分
   char f_pad[FILE_STRUCT_SIZE - MAXNAMELEN - (4 + NDIRECT) * 4 - sizeof(void *)];
 } __attribute__((aligned(4), packed));

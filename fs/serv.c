@@ -184,7 +184,6 @@ void serve_open(u_int envid, struct Fsreq_open *request) {
     return;
   }
 
-
   // 如果文件请求是 不存在则创建 访问文件模式
   if (request->req_omode & O_CREAT) {
     // 创建文件
@@ -202,7 +201,9 @@ void serve_open(u_int envid, struct Fsreq_open *request) {
     return;
   }
 
-	if(request->req_omode & file->f_mode == 0) {
+  int mode = (request->req_omode == 0) ? 4 : 
+             (request->req_omode == 1) ? 2 : 6;
+	if((mode & file->f_mode) != mode) {
 		ipc_send(envid, -E_PERM_DENY, 0, 0);
 		return;
 	}
@@ -390,23 +391,20 @@ void serve_chmod(u_int envid, struct Fsreq_chmod *rq) {
 		ipc_send(envid, r, 0, 0);
 		return;
 	}
-	debugf("%d---\n",file->f_mode);
 
 	int type = rq->req_type;
 	uint32_t mode = rq->req_mode;
-	debugf("%d %d %d %s\n", type,file->f_mode, mode, rq->req_path);
 
 	if(type == 0) {
 		file->f_mode = mode;
 	}
 	else if(type == 1) {
-		file->f_mode = file->f_mode | mode;
+		file->f_mode |= mode;
 	}
 	else if(type == 2) {
-		file->f_mode = file->f_mode & (~mode);
+		file->f_mode &= (~mode);
 	}
 
-	debugf("%d %d\n",file->f_mode, ~mode);
 	file_close(file);
 
 	ipc_send(envid, 0, 0, 0);

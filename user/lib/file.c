@@ -184,7 +184,7 @@ static int file_stat(struct Fd *fd, struct Stat *st) {
   strcpy(st->st_name, file_fd->f_file.f_name);
   st->st_size = file_fd->f_file.f_size;
   st->st_isdir = (file_fd->f_file.f_type == FTYPE_DIR);
-	st->st_mode = (file_fd->f_file.f_mode) << 6;
+	st->st_mode = file_fd->f_file.f_mode;
 
   return 0;
 }
