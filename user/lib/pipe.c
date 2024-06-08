@@ -47,7 +47,7 @@ int pipe(int pfd[2]) {
   // 一个代表只读端，一个代表只写端
   if ((func_info = fd_alloc(&fd0)) < 0 || 
       (func_info = syscall_mem_alloc(0, fd0, PTE_D | PTE_LIBRARY)) < 0) {
-    return func_info;
+    goto err;
   }
 
   if ((func_info = fd_alloc(&fd1)) < 0 || 
