@@ -205,7 +205,6 @@ int dup(int old_fd_no, int new_fd_no) {
 
 // 异常处理程序
 err:
-  /* If error occurs, cancel all map operations. */
   // 取消所有地址映射
   panic_on(syscall_mem_unmap(0, new_fd));
 
