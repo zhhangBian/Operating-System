@@ -176,10 +176,6 @@ int dup(int old_fd_no, int new_fd_no) {
   // 复制打开文件的内容
   old_file_va = fd2data(old_fd);
   new_file_va = fd2data(new_fd);
-  // 通过建立映射关系复制文件描述符的内容
-  if ((func_info = syscall_mem_map(0, old_fd, 0, new_fd, vpt[VPN(old_fd)] & (PTE_D | PTE_LIBRARY))) < 0) {
-    goto err;
-  }
 
   // 如果页目录有效
   if (vpd[PDX(old_file_va)]) {
@@ -199,6 +195,11 @@ int dup(int old_fd_no, int new_fd_no) {
         }
       }
     }
+  }
+
+  // 通过建立映射关系复制文件描述符的内容
+  if ((func_info = syscall_mem_map(0, old_fd, 0, new_fd, vpt[VPN(old_fd)] & (PTE_D | PTE_LIBRARY))) < 0) {
+    goto err;
   }
 
   return new_fd_no;

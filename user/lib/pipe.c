@@ -39,60 +39,50 @@ struct Pipe {
  *   Return an corresponding error code on error.
  */
 int pipe(int pfd[2]) {
-  struct Fd *fd0, *fd1;
-  void *va;
-  int func_info;
+  int r;
+	void *va;
+	struct Fd *fd0, *fd1;
 
-  // 分配两个文件描述符
-  // 一个代表只读端，一个代表只写端
-  if ((func_info = fd_alloc(&fd0)) < 0 || 
-      (func_info = syscall_mem_alloc(0, fd0, PTE_D | PTE_LIBRARY)) < 0) {
-    goto err;
-  }
+	/* Step 1: Allocate the file descriptors. */
+	if ((r = fd_alloc(&fd0)) < 0 || (r = syscall_mem_alloc(0, fd0, PTE_D | PTE_LIBRARY)) < 0) {
+		goto err;
+	}
 
-  if ((func_info = fd_alloc(&fd1)) < 0 || 
-      (func_info = syscall_mem_alloc(0, fd1, PTE_D | PTE_LIBRARY)) < 0) {
-    goto err1;
-  }
+	if ((r = fd_alloc(&fd1)) < 0 || (r = syscall_mem_alloc(0, fd1, PTE_D | PTE_LIBRARY)) < 0) {
+		goto err1;
+	}
 
-  // 将文件描述符映射到同一内存区域
-  va = fd2data(fd0);
-  if ((func_info = syscall_mem_alloc(0, (void *)va, PTE_D | PTE_LIBRARY)) < 0) {
-    goto err2;
-  }
-  // 将fd1对应的虚拟地址映射到同一物理内存
-  if ((func_info = syscall_mem_map(0, (void *)va, 0, (void *)fd2data(fd1), PTE_D | PTE_LIBRARY)) < 0) {
-    goto err3;
-  }
+	/* Step 2: Allocate and map the page for the 'Pipe' structure. */
+	va = fd2data(fd0);
+	if ((r = syscall_mem_alloc(0, (void *)va, PTE_D | PTE_LIBRARY)) < 0) {
+		goto err2;
+	}
+	if ((r = syscall_mem_map(0, (void *)va, 0, (void *)fd2data(fd1), PTE_D | PTE_LIBRARY)) < 0) {
+		goto err3;
+	}
 
-  // 设置管道相应的设备属性
-  fd0->fd_dev_id = devpipe.dev_id;
-  fd0->fd_omode = O_RDONLY;
+  //* Step 3: Set up 'Fd' structures. */
+	fd0->fd_dev_id = devpipe.dev_id;
+	fd0->fd_omode = O_RDONLY;
 
-  fd1->fd_dev_id = devpipe.dev_id;
-  fd1->fd_omode = O_WRONLY;
+	fd1->fd_dev_id = devpipe.dev_id;
+	fd1->fd_omode = O_WRONLY;
 
-  debugf("[%08x] pipecreate \n", env->env_id, vpt[VPN(va)]);
+	debugf("[%08x] pipecreate \n", env->env_id, vpt[VPN(va)]);
 
-  // 保存相应的文件描述符
-  pfd[0] = fd2num(fd0);
-  pfd[1] = fd2num(fd1);
+	/* Step 4: Save the result. */
+	pfd[0] = fd2num(fd0);
+	pfd[1] = fd2num(fd1);
+	return 0;
 
-  return 0;
-
-// 相应的公共错误信息处理
-// 取消映射
 err3:
-  syscall_mem_unmap(0, (void *)va);
-// 取消fd1的映射
+	syscall_mem_unmap(0, (void *)va);
 err2:
-  syscall_mem_unmap(0, fd1);
-// 取消fd0的映射
+	syscall_mem_unmap(0, fd1);
 err1:
-  syscall_mem_unmap(0, fd0);
-// 返回错误信息
+	syscall_mem_unmap(0, fd0);
 err:
-  return func_info;
+	return r;
 }
 
 /* Overview:
@@ -142,6 +132,7 @@ static int _pipe_is_closed(struct Fd *fd, struct Pipe *pipe) {
  *   The parameter 'offset' isn't used here.
  */
 static int pipe_read(struct Fd *fd, void *vbuf, u_int n, u_int offset) {
+  int i;
   struct Pipe *pipe = fd2data(fd);
   char *rbuf;
 
@@ -154,7 +145,7 @@ static int pipe_read(struct Fd *fd, void *vbuf, u_int n, u_int offset) {
   //  - Otherwise, keep yielding until the buffer isn't empty or the pipe is closed.
   
   rbuf = (char *)vbuf;
-  for (int i = 0; i < n; i++) {
+  for (i = 0; i < n; i++) {
     while (pipe->p_rpos >= pipe->p_wpos) {
       if (i > 0 || _pipe_is_closed(fd, pipe)) {
         return i;
@@ -246,8 +237,9 @@ int pipe_is_closed(int fdnum) {
  */
 // 本质是解除文件描述符和管道数据的内存映射
 static int pipe_close(struct Fd *fd) {
-  syscall_mem_unmap(0, (void *)fd2data(fd));
+  void *va = (void *)fd2data(fd);
   syscall_mem_unmap(0, fd);
+  syscall_mem_unmap(0, va);
   return 0;
 }
 
