@@ -121,7 +121,6 @@ int spawn(char *prog, char **argv) {
   // set 'r' and 'goto err' to close the file and return the error.
   int r;
   u_char elfbuf[512];
-  /* Exercise 6.4: Your code here. (1/6) */
   if ((r = readn(fd, elfbuf, sizeof(Elf32_Ehdr))) < 0 || r != sizeof(Elf32_Ehdr)) {
     goto err;
   }
@@ -136,7 +135,6 @@ int spawn(char *prog, char **argv) {
   // Step 3: Create a child using 'syscall_exofork()' and store its envid in 'child'.
   // If the syscall fails, set 'r' and 'goto err'.
   u_int child;
-  /* Exercise 6.4: Your code here. (2/6) */
   child = syscall_exofork();
   if (child < 0) {
     r = child;
@@ -146,7 +144,6 @@ int spawn(char *prog, char **argv) {
   // Step 4: Use 'init_stack(child, argv, &sp)' to initialize the stack of the child.
   // 'goto err1' if that fails.
   u_int sp;
-  /* Exercise 6.4: Your code here. (3/6) */
   if ((r = init_stack(child, argv, &sp)) < 0) {
     goto err1;
   }

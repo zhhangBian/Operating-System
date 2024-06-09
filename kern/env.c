@@ -488,7 +488,8 @@ void env_run(struct Env *e) {
 
   // 切换现在运行的进程
   curenv = e;
-  curenv->env_runs++; // lab6
+  // 代表当前进程的运行时间片数
+  curenv->env_runs++;
   // 设置全局变量cur_pgdir为当前进程页目录地址，在TLB重填时将用到该全局变量
   cur_pgdir = curenv->env_pgdir;
 

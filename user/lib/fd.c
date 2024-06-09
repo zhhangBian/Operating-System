@@ -223,7 +223,7 @@ err:
 //  Update seek position.
 //  Return the number of bytes read successfully.
 //  Return < 0 on error.
-// 从当前文件的读写指针继续读取n个字节到bufferfer中
+// 从对应文件的读写指针继续读取n个字节到bufferfer中
 int read(int fd_no, void *buffer, u_int n) {
   struct Dev *dev;
   struct Fd *fd;

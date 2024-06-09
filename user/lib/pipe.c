@@ -8,6 +8,7 @@ static int pipe_read(struct Fd *fd, void *buf, u_int n, u_int offset);
 static int pipe_stat(struct Fd *, struct Stat *);
 static int pipe_write(struct Fd *fd, const void *buf, u_int n, u_int offset);
 
+// 将管道也视作一种设备，配置相关的属性和方法
 struct Dev devpipe = {
   .dev_id = 'p',
   .dev_name = "pipe",
@@ -17,7 +18,8 @@ struct Dev devpipe = {
   .dev_stat = pipe_stat,
 };
 
-#define PIPE_SIZE 32 // small to provoke races
+// 管道的缓冲区大小
+#define PIPE_SIZE 32
 
 struct Pipe {
   // 下一个将要从管道读数据的位置：只有写者可更新
@@ -38,51 +40,62 @@ struct Pipe {
  *   write end of the pipe on success.
  *   Return an corresponding error code on error.
  */
-int pipe(int pfd[2]) {
-  int r;
-	void *va;
-	struct Fd *fd0, *fd1;
+// 创建一个管道，将传入的指针设置为对应的文件描述符id
+// fd0对应读端，fd1对应写端
+int pipe(int fd_id[2]) {
+  struct Fd *fd0, *fd1;
+	void *fd_data_va;
+  int func_info;
 
-	/* Step 1: Allocate the file descriptors. */
-	if ((r = fd_alloc(&fd0)) < 0 || (r = syscall_mem_alloc(0, fd0, PTE_D | PTE_LIBRARY)) < 0) {
+	// 申请两个文件描述符
+	if ((func_info = fd_alloc(&fd0)) < 0 || 
+      (func_info = syscall_mem_alloc(0, fd0, PTE_D | PTE_LIBRARY)) < 0) {
 		goto err;
 	}
 
-	if ((r = fd_alloc(&fd1)) < 0 || (r = syscall_mem_alloc(0, fd1, PTE_D | PTE_LIBRARY)) < 0) {
+	if ((func_info = fd_alloc(&fd1)) < 0 || 
+      (func_info = syscall_mem_alloc(0, fd1, PTE_D | PTE_LIBRARY)) < 0) {
 		goto err1;
 	}
 
-	/* Step 2: Allocate and map the page for the 'Pipe' structure. */
-	va = fd2data(fd0);
-	if ((r = syscall_mem_alloc(0, (void *)va, PTE_D | PTE_LIBRARY)) < 0) {
+	// 设置管道的共享空间
+	fd_data_va = fd2data(fd0);
+	if ((func_info = syscall_mem_alloc(0, fd_data_va, PTE_D | PTE_LIBRARY)) < 0) {
 		goto err2;
 	}
-	if ((r = syscall_mem_map(0, (void *)va, 0, (void *)fd2data(fd1), PTE_D | PTE_LIBRARY)) < 0) {
+	if ((func_info = syscall_mem_map(0, fd_data_va, 0, fd2data(fd1), PTE_D | PTE_LIBRARY)) < 0) {
 		goto err3;
 	}
 
-  //* Step 3: Set up 'Fd' structures. */
+  // 设置文件描述符对应的管道的属性
 	fd0->fd_dev_id = devpipe.dev_id;
 	fd0->fd_omode = O_RDONLY;
 
 	fd1->fd_dev_id = devpipe.dev_id;
 	fd1->fd_omode = O_WRONLY;
 
-	debugf("[%08x] pipecreate \n", env->env_id, vpt[VPN(va)]);
+	debugf("[%08x] pipecreate \n", env->env_id, vpt[VPN(fd_data_va)]);
 
-	/* Step 4: Save the result. */
-	pfd[0] = fd2num(fd0);
-	pfd[1] = fd2num(fd1);
+	// 将文件描述符id保存到传入的指针
+  // 对应读端
+	fd_id[0] = fd2num(fd0);
+  // 对应写端
+	fd_id[1] = fd2num(fd1);
 	return 0;
 
+// 集体的异常处理段
+// 解除为管道分配的空间
 err3:
-	syscall_mem_unmap(0, (void *)va);
+	syscall_mem_unmap(0, (void *)fd_data_va);
+// 解除分配的文件描述符fd1
 err2:
 	syscall_mem_unmap(0, fd1);
+// 解除分配的文件描述符fd0
 err1:
 	syscall_mem_unmap(0, fd0);
+// 返回错误信息
 err:
-	return r;
+	return func_info;
 }
 
 /* Overview:
@@ -112,7 +125,7 @@ static int _pipe_is_closed(struct Fd *fd, struct Pipe *pipe) {
 
     fd_ref = pageref(fd);
     pipe_ref = pageref(pipe);
-
+  // 下面的判断是避免在运行过程中时间片到期，被强制切换
   } while (runs != env->env_runs);
 
   return fd_ref == pipe_ref;
@@ -132,7 +145,6 @@ static int _pipe_is_closed(struct Fd *fd, struct Pipe *pipe) {
  *   The parameter 'offset' isn't used here.
  */
 static int pipe_read(struct Fd *fd, void *vbuf, u_int n, u_int offset) {
-  int i;
   struct Pipe *pipe = fd2data(fd);
   char *rbuf;
 
@@ -145,7 +157,7 @@ static int pipe_read(struct Fd *fd, void *vbuf, u_int n, u_int offset) {
   //  - Otherwise, keep yielding until the buffer isn't empty or the pipe is closed.
   
   rbuf = (char *)vbuf;
-  for (i = 0; i < n; i++) {
+  for (int i = 0; i < n; i++) {
     while (pipe->p_rpos >= pipe->p_wpos) {
       if (i > 0 || _pipe_is_closed(fd, pipe)) {
         return i;
@@ -170,7 +182,6 @@ static int pipe_read(struct Fd *fd, void *vbuf, u_int n, u_int offset) {
  *   The parameter 'offset' isn't used here.
  */
 static int pipe_write(struct Fd *fd, const void *vbuf, u_int n, u_int offset) {
-  int i;
   struct Pipe *p;
   char *wbuf;
 
@@ -185,7 +196,7 @@ static int pipe_write(struct Fd *fd, const void *vbuf, u_int n, u_int offset) {
   /* Exercise 6.1: Your code here. (3/3) */
   p = fd2data(fd);
   wbuf = (char *)vbuf;
-  for (i = 0; i < n; i++) {
+  for (int i = 0; i < n; i++) {
     while (p->p_wpos - p->p_rpos >= PAGE_SIZE) {
       if (_pipe_is_closed(fd, p)) {
         return i;

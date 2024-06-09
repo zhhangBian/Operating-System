@@ -109,7 +109,6 @@ int parsecmd(char **argv, int *rightpipe) {
       // If the 'open' function encounters an error,
       // utilize 'debugf' to print relevant messages,
       // and subsequently terminate the process using 'exit'.
-      /* Exercise 6.5: Your code here. (2/3) */
       fd = open(t, O_WRONLY);
       if(fd < 0) {
         debugf("open error\n");
@@ -180,35 +179,44 @@ void runcmd(char *s) {
   exit();
 }
 
-void readline(char *buf, u_int n) {
-  int r;
+// 从标准控制台读入一行命令，保存到buffer中
+// n实际上取了buffer的大小
+void readline(char *buffer, u_int n) {
+  int func_info;
   for (int i = 0; i < n; i++) {
-    if ((r = read(0, buf + i, 1)) != 1) {
-      if (r < 0) {
+    // 挨个字节读取
+    if ((func_info = read(0, buffer + i, 1)) != 1) {
+      if (func_info < 0) {
         debugf("read error: %d\n", r);
       }
       exit();
     }
-    if (buf[i] == '\b' || buf[i] == 0x7f) {
+
+    // 如果是退格
+    if (buffer[i] == '\b' || buffer[i] == 0x7f) {
       if (i > 0) {
         i -= 2;
+        if (buffer[i] != '\b') {
+          printf("\b");
+        }
+
+        // 读到换行符，命令解析结束
+        if (buffer[i] == '\r' || buffer[i] == '\n') {
+          buffer[i] = 0;
+          return;
+        }
       } else {
-        i = -1;
+        // 这里有一个bug：在i=0时退格，会产生溢出
+        i -= 1;
       }
-      if (buf[i] != '\b') {
-        printf("\b");
-      }
-    }
-    if (buf[i] == '\r' || buf[i] == '\n') {
-      buf[i] = 0;
-      return;
     }
   }
+
   debugf("line too long\n");
-  while ((r = read(0, buf, 1)) == 1 && buf[0] != '\r' && buf[0] != '\n') {
+  while ((r = read(0, buffer, 1)) == 1 && buffer[0] != '\r' && buffer[0] != '\n') {
     ;
   }
-  buf[0] = 0;
+  buffer[0] = 0;
 }
 
 char buf[1024];
@@ -228,15 +236,15 @@ int main(int argc, char **argv) {
   printf("::                                                         ::\n");
   printf(":::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::\n");
   ARGBEGIN {
-  case 'i':
-    interactive = 1;
-    break;
-  case 'x':
-    echocmds = 1;
-    break;
-  default:
-    usage();
-  }
+    case 'i':
+      interactive = 1;
+      break;
+    case 'x':
+      echocmds = 1;
+      break;
+    default:
+      usage();
+    }
   ARGEND
 
   if (argc > 1) {
@@ -249,6 +257,7 @@ int main(int argc, char **argv) {
     }
     user_assert(r == 0);
   }
+
   for (;;) {
     if (interactive) {
       printf("\n$ ");
