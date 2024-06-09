@@ -155,6 +155,7 @@ int parsecmd(char **argv, int *rightpipe) {
   return argc;
 }
 
+// 运行指令
 void runcmd(char *s) {
   gettoken(s, 0);
 
@@ -196,16 +197,15 @@ void readline(char *buffer, u_int n) {
     if (buffer[i] == '\b' || buffer[i] == 0x7f) {
       if (i > 0) {
         i -= 2;
+        if (buffer[i] != '\b') {
+          printf("\b");
+        }
       } else {
         i = -1;
       }
-
-      if (buffer[i] != '\b') {
-        printf("\b");
-      }
     }
     // 遇到换行，代表命令结束，停止解析
-    if (buffer[i] == '\r' || buffer[i] == '\n') {
+    if (i>=0 && (buffer[i] == '\r' || buffer[i] == '\n')) {
       buffer[i] = 0;
       return;
     }
@@ -215,7 +215,7 @@ void readline(char *buffer, u_int n) {
   debugf("line too long\n");
   // 吃掉剩下的字符，避免缓冲区溢出
   while ((func_info = read(0, buffer, 1)) == 1 && 
-        buffer[0] != '\r' && buffer[0] != '\n');
+          buffer[0] != '\r' && buffer[0] != '\n');
   buffer[0] = 0;
 }
 
