@@ -187,7 +187,7 @@ void readline(char *buffer, u_int n) {
     // 挨个字节读取
     if ((func_info = read(0, buffer + i, 1)) != 1) {
       if (func_info < 0) {
-        debugf("read error: %d\n", r);
+        debugf("read error: %d\n", func_info);
       }
       exit();
     }
@@ -213,7 +213,7 @@ void readline(char *buffer, u_int n) {
   }
 
   debugf("line too long\n");
-  while ((r = read(0, buffer, 1)) == 1 && buffer[0] != '\r' && buffer[0] != '\n') {
+  while ((func_info = read(0, buffer, 1)) == 1 && buffer[0] != '\r' && buffer[0] != '\n') {
     ;
   }
   buffer[0] = 0;
