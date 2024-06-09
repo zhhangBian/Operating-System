@@ -196,26 +196,26 @@ void readline(char *buffer, u_int n) {
     if (buffer[i] == '\b' || buffer[i] == 0x7f) {
       if (i > 0) {
         i -= 2;
-        if (buffer[i] != '\b') {
-          printf("\b");
-        }
-
-        // 读到换行符，命令解析结束
-        if (buffer[i] == '\r' || buffer[i] == '\n') {
-          buffer[i] = 0;
-          return;
-        }
       } else {
-        // 这里有一个bug：在i=0时退格，会产生溢出
-        i -= 1;
+        i = -1;
       }
+
+      if (buffer[i] != '\b') {
+        printf("\b");
+      }
+    }
+    // 遇到换行，代表命令结束，停止解析
+    if (buffer[i] == '\r' || buffer[i] == '\n') {
+      buffer[i] = 0;
+      return;
     }
   }
 
+  // 遇到命令过长的形况：不解析当行
   debugf("line too long\n");
-  while ((func_info = read(0, buffer, 1)) == 1 && buffer[0] != '\r' && buffer[0] != '\n') {
-    ;
-  }
+  // 吃掉剩下的字符，避免缓冲区溢出
+  while ((func_info = read(0, buffer, 1)) == 1 && 
+        buffer[0] != '\r' && buffer[0] != '\n');
   buffer[0] = 0;
 }
 
