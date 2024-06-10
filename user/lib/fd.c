@@ -309,7 +309,7 @@ int write(int fd_no, const void *buffer, u_int n) {
   return func_info;
 }
 
-// 找到fd_no文件对应offest处
+// 找到fd_no文件对应offest处，设置文件描述符的对应属性
 int seek(int fd_no, u_int offset) {
   struct Fd *fd;
   int func_info;

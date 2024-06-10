@@ -27,7 +27,7 @@ void sys_putchar(int c) {
  * Pre-Condition:
  * 	`s` is base address of the string, and `num` is length of the string.
  */
-// 打印一个字符串，其实和sys_putchar一致，进行了一定的封装，带有字符串地址检查
+// 打印一个字符串到终端，其实和sys_putchar一致，进行了一定的封装，带有字符串地址检查
 int sys_print_cons(const void *s, u_int num) {
   if (((u_int)s + num) > UTOP || ((u_int)s) >= UTOP || (s > s + num)) {
     return -E_INVAL;

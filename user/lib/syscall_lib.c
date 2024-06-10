@@ -17,7 +17,7 @@ void syscall_putchar(int ch) {
   msyscall(SYS_putchar, ch);
 }
 
-// 调用内核函数，由此陷入内核态
+// 向终端打印一个字符
 int syscall_print_cons(const void *str, u_int num) {
   return msyscall(SYS_print_cons, str, num);
 }

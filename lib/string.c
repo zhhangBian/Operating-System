@@ -73,6 +73,7 @@ char *strcpy(char *dst, const char *src) {
   return ret;
 }
 
+// 字符串中是否有对应字符，返回第一个出现位置的指针
 const char *strchr(const char *s, int c) {
   for (; *s; s++) {
     if (*s == c) {

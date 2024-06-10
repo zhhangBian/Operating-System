@@ -5,38 +5,41 @@
 
 #define debug 0
 
-int init_stack(u_int child, char **argv, u_int *init_sp) {
-  int argc, i, r, tot;
+// 初始化envid对应进程id的栈空间
+// 按一定格式将argc、argv写入UTEMP页
+int init_stack(u_int envid, char **argv, u_int *init_sp) {
+  int argc, tot;
   char *strings;
   u_int *args;
+  int func_info;
 
   // Count the number of arguments (argc)
   // and the total amount of space needed for strings (tot)
+  // 计算argc和所需的参数空间大小
   tot = 0;
   for (argc = 0; argv[argc]; argc++) {
     tot += strlen(argv[argc]) + 1;
   }
-
-  // Make sure everything will fit in the initial stack page
+  // 如果所需栈空间过大，报错
   if (ROUND(tot, 4) + 4 * (argc + 3) > PAGE_SIZE) {
     return -E_NO_MEM;
   }
 
-  // Determine where to place the strings and the args array
+  // 确定了字符串和指针数组的地址
   strings = (char *)(UTEMP + PAGE_SIZE) - tot;
   args = (u_int *)(UTEMP + PAGE_SIZE - ROUND(tot, 4) - 4 * (argc + 1));
-
-  if ((r = syscall_mem_alloc(0, (void *)UTEMP, PTE_D)) < 0) {
-    return r;
+  // 申请UTEMP所在的页
+  if ((func_info = syscall_mem_alloc(0, (void *)UTEMP, PTE_D)) < 0) {
+    return func_info;
   }
 
   // Copy the argument strings into the stack page at 'strings'
+  // 复制了所有参数字符串
   char *ctemp, *argv_temp;
-  u_int j;
   ctemp = strings;
-  for (i = 0; i < argc; i++) {
+  for (int i = 0; i < argc; i++) {
     argv_temp = argv[i];
-    for (j = 0; j < strlen(argv[i]); j++) {
+    for (int j = 0; j < strlen(argv[i]); j++) {
       *ctemp = *argv_temp;
       ctemp++;
       argv_temp++;
@@ -48,8 +51,9 @@ int init_stack(u_int child, char **argv, u_int *init_sp) {
   // Initialize args[0..argc-1] to be pointers to these strings
   // that will be valid addresses for the child environment
   // (for whom this page will be at USTACKTOP-PAGE_SIZE!).
+  // 设置了指针数组的内容
   ctemp = (char *)(USTACKTOP - UTEMP - PAGE_SIZE + (u_int)strings);
-  for (i = 0; i < argc; i++) {
+  for (int i = 0; i < argc; i++) {
     args[i] = (u_int)ctemp;
     ctemp += strlen(argv[i]) + 1;
   }
@@ -61,6 +65,7 @@ int init_stack(u_int child, char **argv, u_int *init_sp) {
   // Push two more words onto the child's stack below 'args',
   // containing the argc and argv parameters to be passed
   // to the child's main() function.
+  // 设置argc的值和argv数组指针的内容
   u_int *pargv_ptr;
   pargv_ptr = args - 1;
   *pargv_ptr = USTACKTOP - UTEMP - PAGE_SIZE + (u_int)args;
@@ -68,13 +73,17 @@ int init_stack(u_int child, char **argv, u_int *init_sp) {
   *pargv_ptr = argc;
 
   // Set *init_sp to the initial stack pointer for the child
+  // 设置返回栈帧的初始地址
   *init_sp = USTACKTOP - UTEMP - PAGE_SIZE + (u_int)pargv_ptr;
 
-  if ((r = syscall_mem_map(0, (void *)UTEMP, child, (void *)(USTACKTOP - PAGE_SIZE), PTE_D)) <
-      0) {
+  // 将UTEMP页映射到用户栈真正应该处于的地址
+  if ((func_info = 
+        syscall_mem_map(0, (void *)UTEMP, 
+                        envid, (void *)(USTACKTOP - PAGE_SIZE), 
+                        PTE_D)) < 0) {
     goto error;
   }
-  if ((r = syscall_mem_unmap(0, (void *)UTEMP)) < 0) {
+  if ((func_info = syscall_mem_unmap(0, (void *)UTEMP)) < 0) {
     goto error;
   }
 
@@ -82,18 +91,19 @@ int init_stack(u_int child, char **argv, u_int *init_sp) {
 
 error:
   syscall_mem_unmap(0, (void *)UTEMP);
-  return r;
+  return func_info;
 }
 
-static int spawn_mapper(void *data, u_long va, size_t offset, u_int perm, const void *src,
-      size_t len) {
+// 加载程序段的回调函数
+// 由于处于用户态，使用了大量的系统调用完成操作
+static int spawn_mapper(void *data, u_long va, size_t offset, u_int perm, const void *src, size_t len) {
   u_int child_id = *(u_int *)data;
   try(syscall_mem_alloc(child_id, (void *)va, perm));
   if (src != NULL) {
-    int r = syscall_mem_map(child_id, (void *)va, 0, (void *)UTEMP, perm | PTE_D);
-    if (r) {
+    int func_info;
+    if ((func_info = syscall_mem_map(child_id, (void *)va, 0, (void *)UTEMP, perm | PTE_D)) != 0) {
       syscall_mem_unmap(child_id, (void *)va);
-      return r;
+      return func_info;
     }
     memcpy((void *)(UTEMP + offset), src, len);
     return syscall_mem_unmap(0, (void *)UTEMP);
@@ -107,126 +117,123 @@ static int spawn_mapper(void *data, u_long va, size_t offset, u_int perm, const 
  *   coherence, which MOS has NOT implemented. This may result in unexpected behaviours on real
  *   CPUs! QEMU doesn't simulate caching, allowing the OS to function correctly.
  */
-int spawn(char *prog, char **argv) {
-  // Step 1: Open the file 'prog' (the path of the program).
-  // Return the error if 'open' fails.
+// 根据磁盘文件创建一个进程
+int spawn(char *file_path, char **argv) {
+  // 打开磁盘路径对应的文件
   int fd;
-  if ((fd = open(prog, O_RDONLY)) < 0) {
+  if ((fd = open(file_path, O_RDONLY)) < 0) {
     return fd;
   }
 
-  // Step 2: Read the ELF header (of type 'Elf32_Ehdr') from the file into 'elfbuf' using
-  // 'readn()'.
-  // If that fails (where 'readn' returns a different size than expected),
-  // set 'r' and 'goto err' to close the file and return the error.
-  int r;
-  u_char elfbuf[512];
-  if ((r = readn(fd, elfbuf, sizeof(Elf32_Ehdr))) < 0 || r != sizeof(Elf32_Ehdr)) {
+  int func_info;
+  // 读入文件内容到elf_buffer中
+  u_char elf_buffer[512];
+  if ((func_info = readn(fd, elf_buffer, sizeof(Elf32_Ehdr))) < 0 ||
+      func_info != sizeof(Elf32_Ehdr)) {
     goto err;
   }
-
-  const Elf32_Ehdr *ehdr = elf_from(elfbuf, sizeof(Elf32_Ehdr));
+  // 将文件头转换为 Elf32_Ehdr结构体的格式
+  const Elf32_Ehdr *ehdr = elf_from(elf_buffer, sizeof(Elf32_Ehdr));
   if (!ehdr) {
-    r = -E_NOT_EXEC;
+    func_info = -E_NOT_EXEC;
     goto err;
   }
-  u_long entrypoint = ehdr->e_entry;
+  // 读取了程序入口信息
+  u_long entry_point = ehdr->e_entry;
 
-  // Step 3: Create a child using 'syscall_exofork()' and store its envid in 'child'.
-  // If the syscall fails, set 'r' and 'goto err'.
-  u_int child;
-  child = syscall_exofork();
-  if (child < 0) {
-    r = child;
+  // 使用系统调用创建一个子进程
+  // 为什么不使用fork：会替换子进程的代码和数据，不会再从此处继续执行
+  u_int child_envid;
+  child_envid = syscall_exofork();
+  if (child_envid < 0) {
+    func_info = child_envid;
     goto err;
   }
 
-  // Step 4: Use 'init_stack(child, argv, &sp)' to initialize the stack of the child.
-  // 'goto err1' if that fails.
+  // 初始化子进程的占空间
   u_int sp;
-  if ((r = init_stack(child, argv, &sp)) < 0) {
+  if ((func_info = init_stack(child_envid, argv, &sp)) < 0) {
     goto err1;
   }
 
-  // Step 5: Load the ELF segments in the file into the child's memory.
-  // This is similar to 'load_icode()' in the kernel.
+  // 历整个ELF头的程序段，将程序段的内容读到内存中
   size_t ph_off;
   ELF_FOREACH_PHDR_OFF (ph_off, ehdr) {
-    // Read the program header in the file with offset 'ph_off' and length
-    // 'ehdr->e_phentsize' into 'elfbuf'.
-    // 'goto err1' on failure.
-    // You may want to use 'seek' and 'readn'.
-    /* Exercise 6.4: Your code here. (4/6) */
-    if ((r = seek(fd, ph_off)) < 0 || (r = readn(fd, elfbuf, ehdr->e_phentsize)) < 0) {
+    // 设置文件描述符相应的偏移量
+    if ((func_info = seek(fd, ph_off)) < 0) {
       goto err1;
-    }
-
-    Elf32_Phdr *ph = (Elf32_Phdr *)elfbuf;
-    if (ph->p_type == PT_LOAD) {
-      void *bin;
-      // Read and map the ELF data in the file at 'ph->p_offset' into our memory
-      // using 'read_map()'.
-      // 'goto err1' if that fails.
-      /* Exercise 6.4: Your code here. (5/6) */
-      if ((r = read_map(fd, ph->p_offset, &bin)) < 0) {
+      // 读取文件的内容
+      if((func_info = readn(fd, elf_buffer, ehdr->e_phentsize)) < 0) {
         goto err1;
       }
+    }
 
-      // Load the segment 'ph' into the child's memory using 'elf_load_seg()'.
-      // Use 'spawn_mapper' as the callback, and '&child' as its data.
-      // 'goto err1' if that fails.
-      /* Exercise 6.4: Your code here. (6/6) */
-      if ((r = elf_load_seg(ph, bin, spawn_mapper, &child)) < 0) {
+    Elf32_Phdr *ph = (Elf32_Phdr *)elf_buffer;
+    // 如果是需要加载的程序段
+    if (ph->p_type == PT_LOAD) {
+      void *bin;
+      // 先根据程序段相对于文件的偏移得到其在内存中映射到的地址
+      if ((func_info = read_map(fd, ph->p_offset, &bin)) < 0) {
+        goto err1;
+      }
+      // 调用elf_load_seg将程序段加载到适当的位置
+      if ((func_info = elf_load_seg(ph, bin, spawn_mapper, &child_envid)) < 0) {
         goto err1;
       }
     }
   }
+  // 关闭文件
   close(fd);
 
-  struct Trapframe tf = envs[ENVX(child)].env_tf;
-  tf.cp0_epc = entrypoint;
+  // 设置栈帧
+  // 父子进程共享USTACKTOP地址之下的数据，但不共享程序部分
+  struct Trapframe tf = envs[ENVX(child_envid)].env_tf;
+  tf.cp0_epc = entry_point;
   tf.regs[29] = sp;
-  if ((r = syscall_set_trapframe(child, &tf)) != 0) {
+  if ((func_info = syscall_set_trapframe(child_envid, &tf)) != 0) {
     goto err2;
   }
 
-  // Pages with 'PTE_LIBRARY' set are shared between the parent and the child.
-  for (u_int pdeno = 0; pdeno <= PDX(USTACKTOP); pdeno++) {
-    if (!(vpd[pdeno] & PTE_V)) {
+  // 设置父子进程共享页面
+  for (u_int pde_no = 0; pde_no <= PDX(USTACKTOP); pde_no++) {
+    if (!(vpd[pde_no] & PTE_V)) {
       continue;
     }
-    for (u_int pteno = 0; pteno <= PTX(~0); pteno++) {
-      u_int pn = (pdeno << 10) + pteno;
-      u_int perm = vpt[pn] & ((1 << PGSHIFT) - 1);
-      if ((perm & PTE_V) && (perm & PTE_LIBRARY)) {
-        void *va = (void *)(pn << PGSHIFT);
-
-        if ((r = syscall_mem_map(0, va, child, va, perm)) < 0) {
-          debugf("spawn: syscall_mem_map %x %x: %d\n", va, child, r);
+    for (u_int pte_no = 0; pte_no <= PTX(~0); pte_no++) {
+      u_int page_no = (pde_no << 10) + pte_no;
+      u_int permission = vpt[page_no] & ((1 << PGSHIFT) - 1);
+      if ((permission & PTE_V) && (permission & PTE_LIBRARY)) {
+        void *va = (void *)(page_no << PGSHIFT);
+        if ((func_info = syscall_mem_map(0, va, child_envid, va, permission)) < 0) {
+          debugf("spawn: syscall_mem_map %x %x: %d\n", va, child_envid, func_info);
           goto err2;
         }
       }
     }
   }
 
-  if ((r = syscall_set_env_status(child, ENV_RUNNABLE)) < 0) {
-    debugf("spawn: syscall_set_env_status %x: %d\n", child, r);
+  // 设定子进程为运行状态以将其加入进程调度队列，实现子进程的创建
+  if ((func_info = syscall_set_env_status(child_envid, ENV_RUNNABLE)) < 0) {
+    debugf("spawn: syscall_set_env_status %x: %d\n", child_envid, func_info);
     goto err2;
   }
-  return child;
+  return child_envid;
 
+// 异常处理程序
+// 销毁创建的子进程
 err2:
-  syscall_env_destroy(child);
-  return r;
+  syscall_env_destroy(child_envid);
+  return func_info;
 err1:
-  syscall_env_destroy(child);
+  syscall_env_destroy(child_envid);
+// 关闭打开的文件
 err:
   close(fd);
-  return r;
+  return func_info;
 }
 
-int spawnl(char *prog, char *args, ...) {
-  // Thanks to MIPS calling convention, the layout of arguments on the stack
-  // are straightforward.
-  return spawn(prog, &args);
+// 将磁盘中的文件加载到内存，并以此创建一个新进程
+int spawnl(char *file_path, char *args, ...) {
+  // 由于mips的传参机制，可以直接这样传参
+  return spawn(file_path, &args);
 }

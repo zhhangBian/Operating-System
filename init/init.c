@@ -41,7 +41,6 @@
 void mips_init(u_int argc, char **argv, char **penv, u_int ram_low_size) {
   printk("init.c:\tmips_init() is called\n");
 
-  // lab2:
   // 检测物理内存大小，确认页的数量
   mips_detect_memory(ram_low_size);
   // 初始化虚拟内存：创建了相应数量的页控制模块，所有物理页都有对应的唯一的控制模块
@@ -49,12 +48,10 @@ void mips_init(u_int argc, char **argv, char **penv, u_int ram_low_size) {
   // 对pages进行初始化，维护管理空闲页的页控制块的链表
   page_init();
 
-  // lab3:
   // 对envs进行初始化，维护空闲进程列表
   // 并创建模板页目录，方便后续使用
   env_init();
 
-  // lab3:
   // 在内核初始化时设置两个进程，并开始运行（创建即运行）
   ENV_CREATE_PRIORITY(user_bare_loop, 1);
   ENV_CREATE_PRIORITY(user_bare_loop, 2);
@@ -64,16 +61,16 @@ void mips_init(u_int argc, char **argv, char **penv, u_int ram_low_size) {
   ENV_CREATE(user_fktest);
   ENV_CREATE(user_pingpong);
 
-  // lab6:
-  ENV_CREATE(user_icode);  // This must be the first env!
-
+  // 用于启动shell进程，必须是第一个进程
+  // 整个操作系统中除文件系统服务进程外所有进程的共同祖先进程
+  ENV_CREATE(user_icode);
   // lab5:
   ENV_CREATE(user_fstest);
-  // 文件系统服务进程
-  ENV_CREATE(fs_serv);  // This must be the second env!
+  // 文件系统服务进程，必须是第二个进程
+  ENV_CREATE(fs_serv);
   ENV_CREATE(user_devtst);
 
-  // lab3:
+  // 漫长的启动过程结束了，一切都清静了
   schedule(0);
 }
 

@@ -12,6 +12,7 @@ static int pipe_write(struct Fd *fd, const void *buf, u_int n, u_int offset);
 struct Dev devpipe = {
   .dev_id = 'p',
   .dev_name = "pipe",
+  // 配置对设备的操作函数
   .dev_read = pipe_read,
   .dev_write = pipe_write,
   .dev_close = pipe_close,
@@ -44,58 +45,58 @@ struct Pipe {
 // fd0对应读端，fd1对应写端
 int pipe(int fd_id[2]) {
   struct Fd *fd0, *fd1;
-	void *fd_data_va;
+  void *fd_data_va;
   int func_info;
 
-	// 申请两个文件描述符
-	if ((func_info = fd_alloc(&fd0)) < 0 || 
+  // 申请两个文件描述符
+  if ((func_info = fd_alloc(&fd0)) < 0 ||
       (func_info = syscall_mem_alloc(0, fd0, PTE_D | PTE_LIBRARY)) < 0) {
-		goto err;
-	}
+    goto err;
+  }
 
-	if ((func_info = fd_alloc(&fd1)) < 0 || 
+  if ((func_info = fd_alloc(&fd1)) < 0 ||
       (func_info = syscall_mem_alloc(0, fd1, PTE_D | PTE_LIBRARY)) < 0) {
-		goto err1;
-	}
+    goto err1;
+  }
 
-	// 设置管道的共享空间
-	fd_data_va = fd2data(fd0);
-	if ((func_info = syscall_mem_alloc(0, fd_data_va, PTE_D | PTE_LIBRARY)) < 0) {
-		goto err2;
-	}
-	if ((func_info = syscall_mem_map(0, fd_data_va, 0, fd2data(fd1), PTE_D | PTE_LIBRARY)) < 0) {
-		goto err3;
-	}
+  // 设置管道的共享空间
+  fd_data_va = fd2data(fd0);
+  if ((func_info = syscall_mem_alloc(0, fd_data_va, PTE_D | PTE_LIBRARY)) < 0) {
+    goto err2;
+  }
+  if ((func_info = syscall_mem_map(0, fd_data_va, 0, fd2data(fd1), PTE_D | PTE_LIBRARY)) < 0) {
+    goto err3;
+  }
 
   // 设置文件描述符对应的管道的属性
-	fd0->fd_dev_id = devpipe.dev_id;
-	fd0->fd_omode = O_RDONLY;
+  fd0->fd_dev_id = devpipe.dev_id;
+  fd0->fd_omode = O_RDONLY;
 
-	fd1->fd_dev_id = devpipe.dev_id;
-	fd1->fd_omode = O_WRONLY;
+  fd1->fd_dev_id = devpipe.dev_id;
+  fd1->fd_omode = O_WRONLY;
 
-	debugf("[%08x] pipecreate \n", env->env_id, vpt[VPN(fd_data_va)]);
+  debugf("[%08x] pipecreate \n", env->env_id, vpt[VPN(fd_data_va)]);
 
-	// 将文件描述符id保存到传入的指针
+  // 将文件描述符id保存到传入的指针
   // 对应读端
-	fd_id[0] = fd2num(fd0);
+  fd_id[0] = fd2num(fd0);
   // 对应写端
-	fd_id[1] = fd2num(fd1);
-	return 0;
+  fd_id[1] = fd2num(fd1);
+  return 0;
 
 // 集体的异常处理段
 // 解除为管道分配的空间
 err3:
-	syscall_mem_unmap(0, (void *)fd_data_va);
+  syscall_mem_unmap(0, (void *)fd_data_va);
 // 解除分配的文件描述符fd1
 err2:
-	syscall_mem_unmap(0, fd1);
+  syscall_mem_unmap(0, fd1);
 // 解除分配的文件描述符fd0
 err1:
-	syscall_mem_unmap(0, fd0);
+  syscall_mem_unmap(0, fd0);
 // 返回错误信息
 err:
-	return func_info;
+  return func_info;
 }
 
 /* Overview:
@@ -105,27 +106,18 @@ err:
  *   Return 1 if pipe is closed.
  *   Return 0 if pipe isn't closed.
  */
-// 检查管道是否已经关闭
+// 检查管道对应的端口是否已经关闭
+// 写端关闭当且仅当pageref(p[0]) == pageref(pipe);
+// 读端关闭当且仅当pageref(p[1]) == pageref(pipe);
 static int _pipe_is_closed(struct Fd *fd, struct Pipe *pipe) {
-  // The 'pageref(p)' is the total number of readers and writers.
-  // The 'pageref(fd)' is the number of envs with 'fd' open
-  // (readers if fd is a reader, writers if fd is a writer).
-  //
-  // Check if the pipe is closed using 'pageref(fd)' and 'pageref(p)'.
-  // If they're the same, the pipe is closed.
-  // Otherwise, the pipe isn't closed.
-
   int fd_ref, pipe_ref, runs;
-  // Use 'pageref' to get the reference counts for 'fd' and 'p', then
-  // save them to 'fd_ref' and 'pipe_ref'.
-  // Keep retrying until 'env->env_runs' is unchanged before and after
-  // reading the reference counts.
   do {
     runs = env->env_runs;
-
+    // 得到对应的物理页引用次数，相等说明管道已经关闭
+    // pageref操作不是原子的，两个引用次数可能不是同时完成的
+    // 确保两次获取之间没有进程切换
     fd_ref = pageref(fd);
     pipe_ref = pageref(pipe);
-  // 下面的判断是避免在运行过程中时间片到期，被强制切换
   } while (runs != env->env_runs);
 
   return fd_ref == pipe_ref;
@@ -138,34 +130,30 @@ static int _pipe_is_closed(struct Fd *fd, struct Pipe *pipe) {
  *   Return the number of bytes read from the pipe.
  *   The return value must be greater than 0, unless the pipe is closed and nothing
  *   has been written since the last read.
- *
- * Hint:
- *   Use 'fd2data' to get the 'Pipe' referred by 'fd'.
- *   Use '_pipe_is_closed' to check if the pipe is closed.
- *   The parameter 'offset' isn't used here.
  */
-static int pipe_read(struct Fd *fd, void *vbuf, u_int n, u_int offset) {
+// 从管道中读取n个字节
+static int pipe_read(struct Fd *fd, void *buffer_va, u_int n, u_int offset) {
+  // 获取fd对应的管道
   struct Pipe *pipe = fd2data(fd);
-  char *rbuf;
+  // 利用char *是为了确保每次只写入一个字节
+  char *read_buffer = (char *)buffer_va;
 
-  // Use 'fd2data' to get the 'Pipe' referred by 'fd'.
-  // Write a loop that transfers one byte in each iteration.
-  // Check if the pipe is closed by '_pipe_is_closed'.
-  // When the pipe buffer is empty:
-  //  - If at least 1 byte is read, or the pipe is closed, just return the number
-  //    of bytes read so far.
-  //  - Otherwise, keep yielding until the buffer isn't empty or the pipe is closed.
-  
-  rbuf = (char *)vbuf;
+  // 读取n个字节
+  // 由于管道设计并发操作，等待写端大于读端，并且管道未关闭
   for (int i = 0; i < n; i++) {
     while (pipe->p_rpos >= pipe->p_wpos) {
+      // 如果已经有字符读入，但现在管道为空（表现为写端小于读端），返回i
       if (i > 0 || _pipe_is_closed(fd, pipe)) {
         return i;
-      } else {
+      } 
+      // 等待写端写入
+      else {
         syscall_yield();
       }
     }
-    rbuf[i] = pipe->p_buf[pipe->p_rpos % PAGE_SIZE];
+    // 从管道中读取数据
+    read_buffer[i] = pipe->p_buf[pipe->p_rpos % PIPE_SIZE];
+    // 将写端后移
     pipe->p_rpos++;
   }
 }
@@ -175,37 +163,31 @@ static int pipe_read(struct Fd *fd, void *vbuf, u_int n, u_int offset) {
  *
  * Post-Condition:
  *   Return the number of bytes written into the pipe.
- *
- * Hint:
- *   Use 'fd2data' to get the 'Pipe' referred by 'fd'.
- *   Use '_pipe_is_closed' to judge if the pipe is closed.
- *   The parameter 'offset' isn't used here.
  */
-static int pipe_write(struct Fd *fd, const void *vbuf, u_int n, u_int offset) {
-  struct Pipe *p;
-  char *wbuf;
+// 向管道中写入n个字节
+// offest参数实际上没有使用
+static int pipe_write(struct Fd *fd, const void *buffer, u_int n, u_int offset) {
+  // 获取fd对应的管道
+  struct Pipe *pipe = fd2data(fd);
+  // 利用char *是为了确保每次只写入一个字节
+  char *write_buffer = (char *)buffer;
 
-  // Use 'fd2data' to get the 'Pipe' referred by 'fd'.
-  // Write a loop that transfers one byte in each iteration.
-  // If the bytes of the pipe used equals to 'PIPE_SIZE', the pipe is regarded as full.
-  // Check if the pipe is closed by '_pipe_is_closed'.
-  // When the pipe buffer is full:
-  //  - If the pipe is closed, just return the number of bytes written so far.
-  //  - If the pipe isn't closed, keep yielding until the buffer isn't full or the
-  //    pipe is closed.
-  /* Exercise 6.1: Your code here. (3/3) */
-  p = fd2data(fd);
-  wbuf = (char *)vbuf;
+  // 写入n个字节
   for (int i = 0; i < n; i++) {
-    while (p->p_wpos - p->p_rpos >= PAGE_SIZE) {
-      if (_pipe_is_closed(fd, p)) {
+    // 如管道缓冲区已满：等待读入
+    while (pipe->p_wpos - pipe->p_rpos >= PIPE_SIZE) {
+      // 如果管道已经关闭
+      if (_pipe_is_closed(fd, pipe)) {
         return i;
-      } else {
+      } 
+      // 等待读数据，腾出缓冲区
+      else {
         syscall_yield();
       }
     }
-    p->p_buf[p->p_wpos % PAGE_SIZE] = wbuf[i];
-    p->p_wpos++;
+    // 写入数据
+    pipe->p_buf[pipe->p_wpos % PIPE_SIZE] = write_buffer[i];
+    pipe->p_wpos++;
   }
 
   return n;
@@ -242,10 +224,8 @@ int pipe_is_closed(int fdnum) {
  *
  * Post-Condition:
  *   Return 0 on success.
- *
- * Hint:
- *   Use 'syscall_mem_unmap' to unmap the pages.
  */
+// 关闭管道
 // 本质是解除文件描述符和管道数据的内存映射
 static int pipe_close(struct Fd *fd) {
   void *va = (void *)fd2data(fd);
@@ -254,6 +234,7 @@ static int pipe_close(struct Fd *fd) {
   return 0;
 }
 
+// 获取设备函数，但此处无用
 static int pipe_stat(struct Fd *fd, struct Stat *stat) {
   return 0;
 }
