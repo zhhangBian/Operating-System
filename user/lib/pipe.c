@@ -200,23 +200,21 @@ static int pipe_write(struct Fd *fd, const void *buffer, u_int n, u_int offset) 
  *   Return 1 if the pipe is closed.
  *   Return 0 if the pipe isn't closed.
  *   Return -E_INVAL if 'fdnum' is invalid or unmapped.
- *
- * Hint:
- *   Use '_pipe_is_closed'.
  */
-int pipe_is_closed(int fdnum) {
+// 检查文件描述符对应的管道是否关闭
+int pipe_is_closed(int fd_no) {
+  struct Pipe *pipe;
   struct Fd *fd;
-  struct Pipe *p;
-  int r;
+  int func_info;
 
-  // Step 1: Get the 'fd' referred by 'fdnum'.
-  if ((r = fd_lookup(fdnum, &fd)) < 0) {
-    return r;
+  // 获取对应的文件描述符
+  if ((func_info = fd_lookup(fd_no, &fd)) < 0) {
+    return func_info;
   }
-  // Step 2: Get the 'Pipe' referred by 'fd'.
-  p = (struct Pipe *)fd2data(fd);
-  // Step 3: Use '_pipe_is_closed' to judge if the pipe is closed.
-  return _pipe_is_closed(fd, p);
+  // 获取管道
+  pipe = (struct Pipe *)fd2data(fd);
+  // 判断是否关闭
+  return _pipe_is_closed(fd, pipe);
 }
 
 /* Overview:

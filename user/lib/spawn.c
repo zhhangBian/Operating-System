@@ -159,13 +159,9 @@ int spawn(char *file_path, char **argv) {
   // 历整个ELF头的程序段，将程序段的内容读到内存中
   size_t ph_off;
   ELF_FOREACH_PHDR_OFF (ph_off, ehdr) {
-    // 设置文件描述符相应的偏移量
-    if ((func_info = seek(fd, ph_off)) < 0) {
+    // 设置文件描述符相应的偏移量并读取文件的内容
+    if ((func_info = seek(fd, ph_off)) < 0 || readn(fd, elf_buffer, ehdr->e_phentsize) < 0) {
       goto err1;
-      // 读取文件的内容
-      if((func_info = readn(fd, elf_buffer, ehdr->e_phentsize)) < 0) {
-        goto err1;
-      }
     }
 
     Elf32_Phdr *ph = (Elf32_Phdr *)elf_buffer;
