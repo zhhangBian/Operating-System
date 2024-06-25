@@ -167,7 +167,7 @@
 #define UXSTACKTOP UTOP
 
 // 用户栈地址
-#define USTACKTOP (UTOP - 2 * PTMAP)
+#define USTACKTOP (UTOP - 4 * PTMAP)
 
 #define UTEXT PDMAP
 #define UCOW (UTEXT - PTMAP)

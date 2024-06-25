@@ -5,8 +5,10 @@
 NESTED(handle_\exception, TF_SIZE + 8, zero)
   move    a0, sp
   addiu   sp, sp, -8
+  # 相应的参数自动填入，就是栈帧
   jal     \handler
   addiu   sp, sp, 8
+  # 处理完异常后，返回用户态
   j       ret_from_exception
 END(handle_\exception)
 .endm
@@ -14,6 +16,15 @@ END(handle_\exception)
 .text
 # 恢复现场
 FEXPORT(ret_from_exception)
+  # 返回用户态前，先进行信号的处理
+  # do sigaction
+  move    a0, sp
+  addiu   sp, sp, -8
+  jal     do_sigaction
+  nop
+  addiu   sp, sp, 8
+  # end of do sigaction
+  # 恢复现场
   RESTORE_ALL
   eret
 

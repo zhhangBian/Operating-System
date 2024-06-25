@@ -17,6 +17,40 @@
 #define ENV_RUNNABLE 1
 #define ENV_NOT_RUNNABLE 2
 
+// 中断信号
+#define SIGINT 2
+// 非法指令
+#define SIGILL 4
+// 停止进程信号
+#define SIGKILL 9
+// 访问地址错误，当访问[0, 0x003f_e000)内地址时
+#define SIGSEGV 11
+// 子进程终止信号
+#define SIGCHLD 17
+// 系统调用号未定义
+#define SIGSYS 31
+
+/* Values for the HOW argument to `sigprocmask'.  */
+#define	SIG_BLOCK     0
+#define	SIG_UNBLOCK   1
+#define	SIG_SETMASK   2
+
+#define GET_SIG(sig) (1 << (sig - 1)) 
+
+// 信号掩码结构体
+typedef struct sigset_t {
+  // 表示MOS所需要处理的[1,32]信号掩码
+  // 对应位为1表示阻塞，0表示未阻塞
+  uint32_t sig;
+} sigset_t;
+
+struct sigaction {
+  // 信号的处理函数，当未屏蔽信号到达并且“处理时机”合适时，进程就会执行该函数
+  void (*sa_handler)(int);
+  // 存放了 对应信号处理函数 被执行时 需要被阻塞的信号掩码
+  sigset_t sa_mask;
+};
+
 // Control block of an environment (process).
 // Env就是PCB，PCB是系统感知进程存在的唯一标志。进程与PCB 是一一对应的。
 struct Env {
@@ -70,9 +104,22 @@ struct Env {
   // mod: modify，写入异常，对应写入不可写页面时产生该异常
   u_int env_user_tlb_mod_entry;
 
-  // Lab 6 scheduler counts
-  // number of times we've been env_run'ed
+  // 进程运行的时间片数
   u_int env_runs;
+
+  // sigaction
+  // 当前正在处理的信号
+  u_int sig_now;
+  // 存储进程接收到的信号列表
+  uint32_t sig_to_handle;
+
+  // 信号处理函数，在用户态
+  u_int sig_entry;
+  // 相应的信号处理函数
+  struct sigaction act[64];
+  // 掩码栈
+  int sig_mask_pos;
+  uint32_t sig_mask_stack[32];
 };
 
 LIST_HEAD(Env_list, Env);

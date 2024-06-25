@@ -24,6 +24,14 @@ enum {
 	SYS_cgetc,
 	SYS_write_dev,
 	SYS_read_dev,
+  // sigaction
+  SYS_SIG_KILL,
+  SYS_SIGACTION,
+  SYS_SIG_SHIELD,
+  SYS_SIG_PENDING,
+  SYS_SIG_ENTRY,
+  SYS_SIG_FINISH,
+  // sigaction end
 	MAX_SYSNO,
 };
 

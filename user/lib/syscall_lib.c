@@ -97,3 +97,35 @@ int syscall_write_dev(void *data_addr, u_int device_addr, u_int data_len) {
 int syscall_read_dev(void *data_addr, u_int device_addr, u_int data_len) {
   return msyscall(SYS_read_dev, data_addr, device_addr, data_len);
 }
+
+// sigaction
+
+// 发送信号
+int syscall_kill(u_int envid, int sig) {
+  return msyscall(SYS_SIG_KILL, envid, sig);
+}
+
+// 信号注册函数
+int syscall_sigaction(int signum, struct sigaction *new_act, struct sigaction *old_act) {
+  return msyscall(SYS_SIGACTION, signum, new_act, old_act);
+}
+
+// 更改当前进程的信号屏蔽字
+int syscall_set_sig_shield(int how, sigset_t *new_set, sigset_t *old_set) {
+  return msyscall(SYS_SIG_SHIELD, how, new_set, old_set);
+}
+
+// 获取当前的信号集
+int syscall_get_sig_pending(sigset_t *set) {
+  return msyscall(SYS_SIG_PENDING, set);
+}
+
+// 设置进程的信号处理函数地址
+int syscall_set_sig_entry(u_int envid, u_int func_address) {
+  return msyscall(SYS_SIG_ENTRY, envid, func_address);
+}
+
+// 完成相应信号的信号处理，设置屏蔽字
+int syscall_sig_finish(u_int sig_no) {
+  return msyscall(SYS_SIG_FINISH, sig_no);
+}

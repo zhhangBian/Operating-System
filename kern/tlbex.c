@@ -15,7 +15,8 @@ static void passive_alloc(u_int va, Pde *pgdir, u_int asid) {
   struct Page *p = NULL;
 
   if (va < UTEMP) {
-    panic("address too low");
+    sys_kill(0, SIGSEGV);
+    // panic("address too low");
   }
 
   if (va >= USTACKTOP && va < USTACKTOP + PAGE_SIZE) {

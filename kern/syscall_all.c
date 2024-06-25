@@ -253,6 +253,18 @@ int sys_exofork(void) {
   // 继承父进程的优先级
   env->env_pri = curenv->env_pri;
 
+  // sigcation
+  env->sig_now = curenv->sig_now;
+  env->sig_to_handle = curenv->sig_to_handle;
+  env->sig_entry = curenv->sig_entry;
+  for(int i = 0; i < 64; i++) {
+    env->act[i] = curenv->act[i];
+  }
+  env->sig_mask_pos = curenv->sig_mask_pos;
+  for(int i = 0; i < 32; i++) {
+    env->sig_mask_stack[i] = curenv->sig_mask_stack[i];
+  }
+
   return env->env_id;
 }
 
@@ -558,6 +570,109 @@ int sys_read_dev(u_int data_addr, u_int device_addr, u_int data_len) {
   return 0;
 }
 
+// 信号发送函数
+// 当envid为0时，代表向自身发送信号
+// 当envid对应进程不存在，或者sig不符合定义范围时，返回异常码-1。
+int sys_kill(u_int envid, int sig) {
+  // 检查进程号是否合理
+  if (sig > 32 || sig < 1) {
+    return -1;
+  }
+
+  // 获取对应的进程块
+  struct Env *env;
+  if (envid2env(envid, &env, 0) < 0) {
+    return -1;
+  }
+
+  env->sig_to_handle |= GET_SIG(sig);
+  // printk("kill sig %d in env %d %d %d\n",sig,env->env_id,env->sig_to_handle,env->sig_shield);
+
+  return 0;
+}
+
+// 信号注册函数：设置某信号的处理函数
+// 要操作的信号  要设置的对信号的新处理方式  原来对信号的处理方式
+// 成功返回0，失败返回-1
+int sys_sigaction(int sig_num, struct sigaction *new_act, struct sigaction *old_act) {
+  if(sig_num > 32 || sig_num < 1) {
+    return -1;
+  }
+
+  if(old_act != NULL) {
+    *old_act = curenv->act[sig_num];
+  }
+  if(new_act != NULL && sig_num != SIGKILL) {
+    curenv->act[sig_num] = *new_act;
+    // printk("debug: %x register %d\n",curenv->env_id, sig_num);
+  }
+
+  return 0;
+}
+
+// 更改当前进程的信号屏蔽字
+int sys_set_sig_shield(int how, sigset_t *new_set, sigset_t *old_set) {
+  uint32_t sig_shield = curenv->sig_mask_stack[curenv->sig_mask_pos];
+  // 保存原有的信号屏蔽字
+  if(old_set != NULL) {
+    old_set->sig = sig_shield;
+  }
+
+  // 按照方式设置新信号屏蔽字
+  if(new_set != NULL) {
+    switch (how) {
+      case SIG_BLOCK:
+        sig_shield |= new_set->sig;
+        break;
+      case SIG_UNBLOCK:
+        sig_shield &= ~new_set->sig;
+        break;
+      case SIG_SETMASK:
+        sig_shield = new_set->sig;
+        break;
+      default:
+        return -1;
+        break;
+    }
+  }
+
+  curenv->sig_mask_stack[curenv->sig_mask_pos] = sig_shield;
+
+  return 0;
+}
+
+// 获取当前进程等待处理的信号
+int sys_get_sig_pending(sigset_t *set) {
+  set->sig = curenv->sig_to_handle;
+}
+
+// 设置当前进程的信号处理函数地址（在用户态）
+int sys_set_sig_entry(u_int envid, u_int func_address) {
+  struct Env *env;
+  // 获取进程控制块
+  try(envid2env(envid, &env, 0));
+  // 设置异常处理函数
+  env->sig_entry = func_address;
+
+  return 0;
+}
+
+int sys_sig_finish(u_int sig_no) {
+  if(sig_no < 1 || sig_no > 32) {
+    return -1;
+  }
+
+  struct Env *env;
+  // 获取进程控制块
+  try(envid2env(0, &env, 0));
+  // 设置异常处理函数
+  env->sig_now = 0;
+  env->sig_to_handle &= (~GET_SIG(sig_no));
+  env->sig_mask_pos--;
+
+  return 0;
+}
+
 // 系统调用函数列表
 // 通过函数指针获取其中的函数
 void *syscall_table[MAX_SYSNO] = {
@@ -614,6 +729,24 @@ void *syscall_table[MAX_SYSNO] = {
 
     // 从设备读入
     [SYS_read_dev]          = sys_read_dev,
+
+    // 发送一个信号
+    [SYS_SIG_KILL]          = sys_kill,
+
+    // 注册一个信号
+    [SYS_SIGACTION]         = sys_sigaction,
+
+    // 更改当前进程的信号屏蔽字
+    [SYS_SIG_SHIELD]        = sys_set_sig_shield,
+
+    // 获取当前进程等待处理的信号
+    [SYS_SIG_PENDING]       = sys_get_sig_pending,
+
+    // 设置当前进程的信号处理函数地址
+    [SYS_SIG_ENTRY]         = sys_set_sig_entry,
+
+    // 完成相应信号的信号处理，设置屏蔽字
+    [SYS_SIG_FINISH]        = sys_sig_finish,
 };
 
 /* Overview:
@@ -632,6 +765,8 @@ void do_syscall(struct Trapframe *tf) {
   // 如果系统调用号不合理
   if (syscall_type < 0 || syscall_type >= MAX_SYSNO) {
     tf->regs[2] = -E_NO_SYS;
+    sys_kill(curenv->env_id, SIGSYS);
+    tf->cp0_epc += 4;
     return;
   }
 
@@ -653,5 +788,67 @@ void do_syscall(struct Trapframe *tf) {
 
   // 将函数指针存入返回值 $v0，存入返回值后由jr执行，在entry.S中
   // 即使不需要这么多参数，也先填入
+  // 自动进行压栈操作
   tf->regs[2] = syscall_func(arg1, arg2, arg3, arg4, arg5);
+}
+
+// 从内核态返回后，先处理异常
+void do_sigaction(struct Trapframe *tf) {
+  // 以上在内核态，不用管
+  if(tf->cp0_epc >= ULIM || curenv->sig_to_handle == 0) {
+    return;
+  }
+  // printk("hello from do_sigaction  %d\n",curenv->env_id);
+  // 当前进程还未处理的信号
+  uint32_t sig_to_handle = curenv->sig_to_handle;
+  // 当前信号的屏蔽集
+  uint32_t sig_shield = curenv->sig_mask_stack[curenv->sig_mask_pos];
+  // 找到的信号
+  u_int sig_now = 0;
+
+  // 查找当前需要处理的信号
+  for(int i = 1; i <= 32; i++) {
+    // 如果需要处理 且 未被屏蔽
+    if((sig_to_handle & GET_SIG(i)) != 0 && (sig_shield & GET_SIG(i)) == 0) {
+      sig_now = i;
+      break;
+    }
+  }
+
+  // 如果有SIGKILL，则直接退出
+  if((sig_to_handle & GET_SIG(SIGKILL)) != 0) {
+    sig_now = SIGKILL;
+  }
+
+  // 没有需要处理的信号，直接返回
+  if(sig_now == 0) {
+    return;
+  }
+
+  // 设置相应的信号处理
+  curenv->sig_now = sig_now;
+  // 屏蔽当前处理的信号
+  sig_shield |= GET_SIG(sig_now);
+  sig_shield |= curenv->act[sig_now].sa_mask.sig;
+  curenv->sig_mask_stack[++(curenv->sig_mask_pos)] = sig_shield;
+
+  struct Trapframe old_tf = *tf;
+  if (tf->regs[29] < USTACKTOP || tf->regs[29] >= UXSTACKTOP) {
+    tf->regs[29] = UXSTACKTOP; // 将栈指针指向用户异常处理栈
+  }
+  // 将当前的 Trapframe压入异常处理栈
+  tf->regs[29] -= sizeof(struct Trapframe);
+  *(struct Trapframe *)tf->regs[29] = old_tf;
+  // 进行信号处理
+  if (curenv->sig_entry) {
+    // 填入sig_entry的三个参数
+    tf->regs[4] = tf->regs[29];
+    tf->regs[5] = curenv->act[sig_now].sa_handler;
+    tf->regs[6] = sig_now;
+    tf->regs[29] -= sizeof(tf->regs[4]) + sizeof(tf->regs[5]) + sizeof(tf->regs[6]);
+    // 准备跳转到对应的信号处理函数
+    tf->cp0_epc = curenv->sig_entry;
+  } else {
+    panic("sig but no user handler registered\n");
+  }
 }

@@ -263,6 +263,19 @@ int env_alloc(struct Env **new, u_int parent_id) {
     return func_info;
   }
 
+  // sigaction
+  env->sig_now = 0;
+  env->sig_to_handle = 0;
+  env->sig_entry = 0;
+  for(int i = 0; i < 64; i++) {
+    env->act[i].sa_mask.sig = 0;
+    env->act[i].sa_handler = 0;
+  }
+  env->sig_mask_pos = 0;
+  for(int i = 0; i < 32; i++) {
+    env->sig_mask_stack[i] = 0;
+  }
+
   // 设置进程相关的属性
   /* Step 4: Initialize the sp and 'cp0_status' in 'e->env_tf'.
    *   Set the EXL bit to ensure that the processor remains in kernel mode during context
@@ -399,6 +412,9 @@ void env_free(struct Env *env) {
   u_int physical_address;
 
   /* Hint: Note the environment's demise.*/
+  if(env->env_parent_id) {
+    sys_kill(env->env_parent_id, SIGCHLD);
+  }
   printk("[%08x] free env %08x\n", (curenv ? curenv->env_id : 0), env->env_id);
 
   /* Hint: Flush all mapped pages in the user portion of the address space */
@@ -466,8 +482,8 @@ extern void env_pop_tf(struct Trapframe *tf, u_int asid) __attribute__((noreturn
  * Hints:
  *   You may use these functions: 'env_pop_tf'.
  */
-void env_run(struct Env *e) {
-  assert(e->env_status == ENV_RUNNABLE);
+void env_run(struct Env *env) {
+  assert(env->env_status == ENV_RUNNABLE);
   // WARNING BEGIN: DO NOT MODIFY FOLLOWING LINES!
 #ifdef MOS_PRE_ENV_RUN
   MOS_PRE_ENV_RUN_STMT
@@ -487,7 +503,7 @@ void env_run(struct Env *e) {
   }
 
   // 切换现在运行的进程
-  curenv = e;
+  curenv = env;
   // 代表当前进程的运行时间片数
   curenv->env_runs++;
   // 设置全局变量cur_pgdir为当前进程页目录地址，在TLB重填时将用到该全局变量
@@ -496,7 +512,11 @@ void env_run(struct Env *e) {
   // 根据栈帧还原进程上下文，并进行进程调度、运行程序
   // 恢复现场、设置时钟中断、异常返回
   // 这是一个汇编函数
-  env_pop_tf(&curenv->env_tf, curenv->env_asid);
+
+  // env_pop_tf(&curenv->env_tf, curenv->env_asid);
+  // 保证了不会修改env块中的内容
+  struct Trapframe tmp_tf = curenv->env_tf;
+  env_pop_tf(&tmp_tf, curenv->env_asid);
 }
 
 void env_check() {

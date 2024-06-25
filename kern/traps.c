@@ -37,5 +37,11 @@ void (*exception_handlers[32])(void) = {
  */
 void do_reserved(struct Trapframe *tf) {
   print_tf(tf);
-  panic("Unknown ExcCode %2d", (tf->cp0_cause >> 2) & 0x1f);
+  int t = (tf->cp0_cause >> 2) & 0x1f;
+  if(t == 10) {
+    sys_kill(0, SIGILL);
+  }
+  else {
+    panic("Unknown ExcCode %2d", t);
+  }
 }

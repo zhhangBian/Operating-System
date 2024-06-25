@@ -47,9 +47,40 @@ static void /*不返回函数*/__attribute__((noreturn)) cow_entry(struct Trapfr
 
   // 在异常处理完成后恢复现场，现在位于用户态，使用系统调用恢复现场
   // 当从该系统调用返回时，将返回设置的栈帧中epc的位置
-  // 对于cow_entry来说，意味着恢复到产生TLB Mod时的现场。
+  // 对于cow_entry来说，意味着恢复到产生TLB Mod时的现场
   int func_info = syscall_set_trapframe(current_envid, tf);
   user_panic("syscall_set_trapframe returned %d", func_info);
+}
+
+// 在用户态处理信号的函数地址
+static void __attribute__((noreturn)) sig_entry(struct Trapframe *tf,  void (*sig_handler)(int), int sig_no) {
+  int func_info;
+  // 如果有相应的处理函数
+  if (sig_handler != 0) {
+    sig_handler(sig_no); //直接调用定义好的处理函数
+  } else {
+    // 如果没有
+    switch (sig_no) {
+      case SIGINT:
+      case SIGILL:
+      case SIGKILL:
+      case SIGSEGV:
+        exit();
+        break;
+      default:
+        {}
+    }
+  }
+
+  syscall_sig_finish(sig_no);
+  func_info = syscall_set_trapframe(0, tf);
+  user_panic("syscall_set_trapframe returned %d", func_info);
+}
+
+int set_sigaction_entry(void) {
+  try(syscall_set_sig_entry(0, sig_entry));
+  try(syscall_set_tlb_mod_entry(0, cow_entry));
+  return 0;
 }
 
 /* Overview:
@@ -122,6 +153,7 @@ int fork(void) {
   if (env->env_user_tlb_mod_entry != (u_int)cow_entry) {
     // 为什么不直接写：能读取的进程块是由内核暴露的，不能进行写操作，由硬件屏蔽
     try(syscall_set_tlb_mod_entry(/*为自己设置*/0, cow_entry));
+    try(syscall_set_sig_entry(0, sig_entry));
   }
 
   // 调用结束后，创建了一个子进程，处于被阻塞状态，需要被设置
